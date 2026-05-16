@@ -91,12 +91,20 @@ describe("resources route", () => {
     app.route("/api", createResourcesRoute({
       getRuntimeContext: () => ({
         serverId: "server_ctx",
+        serverNodeId: "node_ctx",
         userId: "user_ctx",
         studioId: "studio_ctx",
         connectionKind: "local",
         credentialKind: "loopback_token",
         platformAccountId: null,
         officialServiceKind: null,
+        executionBoundary: {
+          schemaVersion: 1,
+          boundaryId: "execb_node_ctx_studio_ctx",
+          kind: "local_process",
+          serverNodeId: "node_ctx",
+          studioId: "studio_ctx",
+        },
       }),
       getResource: (_resourceId, options = {}) => {
         seenContext = options.requestContext;
@@ -123,13 +131,20 @@ describe("resources route", () => {
     expect(res.status).toBe(200);
     expect(seenContext).toMatchObject({
       serverId: "server_ctx",
+      serverNodeId: "node_ctx",
       userId: "user_ctx",
       studioId: "studio_ctx",
       connectionKind: "local",
       credentialKind: "loopback_token",
+      executionBoundary: {
+        boundaryId: "execb_node_ctx_studio_ctx",
+        kind: "local_process",
+        serverNodeId: "node_ctx",
+      },
       authPrincipal: {
         kind: "local_user",
         userId: "user_ctx",
+        serverNodeId: "node_ctx",
         credentialKind: "loopback_token",
       },
     });

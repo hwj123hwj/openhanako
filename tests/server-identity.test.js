@@ -73,6 +73,9 @@ describe("server identity loader", () => {
 
     expect(loadServerIdentity(tmpDir)).toEqual({
       serverId: "server_test",
+      serverNodeId: "server_test",
+      serverNodeKind: "local",
+      serverNodeTransport: "loopback",
       userId: "user_test",
       studioId: "studio_test",
       label: "Test Server",
@@ -83,6 +86,44 @@ describe("server identity loader", () => {
       membershipModel: "single_user_implicit",
       storage: { provider: "legacy_hana_home", legacyRoot: true },
     });
+  });
+
+  it("loads explicit ServerNode metadata when present", async () => {
+    tmpDir = makeTmpDir();
+    writeValidIdentity(tmpDir, {
+      serverNode: {
+        serverNodeId: "node_test",
+        nodeKind: "local",
+        transport: "loopback",
+        execution: { kind: "local_process" },
+      },
+    });
+    const { loadServerIdentity } = await import("../core/server-identity.js");
+
+    expect(loadServerIdentity(tmpDir)).toMatchObject({
+      serverId: "server_test",
+      serverNodeId: "node_test",
+      serverNodeKind: "local",
+      serverNodeTransport: "loopback",
+    });
+  });
+
+  it("creates ServerNode execution metadata for new local identity registries", async () => {
+    tmpDir = makeTmpDir();
+    const { ensureLocalIdentityRegistries } = await import("../core/server-identity.js");
+
+    ensureLocalIdentityRegistries(tmpDir);
+
+    const serverNode = JSON.parse(fs.readFileSync(path.join(tmpDir, "server-node.json"), "utf-8"));
+    expect(serverNode).toMatchObject({
+      schemaVersion: 1,
+      label: "Local Hana",
+      serverNodeId: serverNode.serverId,
+      nodeKind: "local",
+      transport: "loopback",
+      execution: { kind: "local_process" },
+    });
+    expect(serverNode.serverId).toMatch(/^server_[0-9a-f-]{36}$/);
   });
 
   it("throws when identity registry files are missing instead of creating them at runtime", async () => {
@@ -155,6 +196,9 @@ describe("server identity loader", () => {
 
     expect(loadServerIdentity(tmpDir)).toMatchObject({
       serverId: "server_legacy",
+      serverNodeId: "server_legacy",
+      serverNodeKind: "local",
+      serverNodeTransport: "loopback",
       userId: "user_legacy",
       studioId: "space_legacy",
       studioLabel: "Personal Studio",

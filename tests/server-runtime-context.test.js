@@ -70,6 +70,9 @@ describe("server runtime context", () => {
     expect(context).toEqual({
       schemaVersion: 1,
       serverId: "server_runtime",
+      serverNodeId: "server_runtime",
+      serverNodeKind: "local",
+      serverNodeTransport: "loopback",
       userId: "user_runtime",
       studioId: "studio_runtime",
       label: "Runtime Server",
@@ -85,11 +88,33 @@ describe("server runtime context", () => {
       credentialKind: "loopback_token",
       platformAccountId: null,
       officialServiceKind: null,
+      executionBoundary: {
+        schemaVersion: 1,
+        boundaryId: "execb_server_runtime_studio_runtime",
+        kind: "local_process",
+        serverNodeId: "server_runtime",
+        studioId: "studio_runtime",
+        workbench: {
+          kind: "legacy_agent_workbench",
+          root: null,
+        },
+        sandbox: {
+          kind: "legacy_session_permission",
+          enforcedBy: "existing_runtime",
+        },
+        filesystem: {
+          policy: "legacy_workbench_scope",
+        },
+        network: {
+          policy: "local_runtime_default",
+        },
+      },
       capabilities: ["chat", "resources", "tools"],
       appVersion: "2.3.4",
     });
     expect(Object.isFrozen(context)).toBe(true);
     expect(Object.isFrozen(context.storage)).toBe(true);
+    expect(Object.isFrozen(context.executionBoundary)).toBe(true);
   });
 
   it("fails explicitly when identity registries are invalid", async () => {

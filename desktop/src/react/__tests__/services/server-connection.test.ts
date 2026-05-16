@@ -222,6 +222,42 @@ describe('server connection helpers', () => {
     });
   });
 
+  it('keeps ServerNode execution scope from identity metadata', () => {
+    const connection = createLocalServerConnection({
+      serverPort: '3210',
+      serverToken: 'test-token-123',
+    });
+    expect(connection).not.toBeNull();
+
+    expect(mergeServerIdentity(connection!, {
+      connectionKind: 'local',
+      serverId: 'server_stable',
+      serverNodeId: 'node_stable',
+      serverNodeKind: 'local',
+      serverNodeTransport: 'loopback',
+      userId: 'user_stable',
+      studioId: 'studio_stable',
+      label: 'Stable Server',
+      executionBoundary: {
+        schemaVersion: 1,
+        boundaryId: 'execb_node_stable_studio_stable',
+        kind: 'local_process',
+        serverNodeId: 'node_stable',
+        studioId: 'studio_stable',
+      },
+    })).toMatchObject({
+      serverId: 'server_stable',
+      serverNodeId: 'node_stable',
+      serverNodeKind: 'local',
+      serverNodeTransport: 'loopback',
+      executionBoundary: {
+        boundaryId: 'execb_node_stable_studio_stable',
+        serverNodeId: 'node_stable',
+        studioId: 'studio_stable',
+      },
+    });
+  });
+
   it('refreshes local transport without drifting stable server/user/space identity', () => {
     const connection = mergeServerIdentity(createLocalServerConnection({
       serverPort: '3210',

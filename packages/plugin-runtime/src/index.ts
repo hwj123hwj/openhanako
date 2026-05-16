@@ -69,6 +69,33 @@ export interface HanaResourceEnvelope {
   [key: string]: unknown;
 }
 
+export interface HanaExecutionBoundary {
+  schemaVersion: 1;
+  boundaryId: string;
+  kind: 'local_process' | string;
+  serverNodeId: string;
+  studioId: string;
+  workbench?: {
+    kind: string;
+    root: string | null;
+    [key: string]: unknown;
+  };
+  sandbox?: {
+    kind: string;
+    enforcedBy?: string;
+    [key: string]: unknown;
+  };
+  filesystem?: {
+    policy: string;
+    [key: string]: unknown;
+  };
+  network?: {
+    policy: string;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
 export interface HanaSessionFileMediaItem {
   type: 'session_file';
   fileId: string;
@@ -95,12 +122,14 @@ export interface HanaMediaDetails {
 
 export interface HanaToolContext {
   serverId: string;
+  serverNodeId?: string;
   userId: string;
   studioId: string;
   connectionKind?: 'local' | 'lan' | 'custom_remote' | 'relay' | 'cloud' | string;
   credentialKind?: 'none' | 'loopback_token' | 'device_credential' | 'user_session' | string;
   platformAccountId?: string | null;
   officialServiceKind?: 'relay' | 'cloud_studio' | 'inference' | 'billing' | string | null;
+  executionBoundary?: HanaExecutionBoundary;
   pluginId: string;
   pluginDir: string;
   dataDir: string;
@@ -288,12 +317,14 @@ export interface HanaPluginLogger {
 
 export interface HanaBusHandlerContext {
   serverId: string;
+  serverNodeId?: string;
   userId: string;
   studioId: string;
   connectionKind?: 'local' | 'lan' | 'custom_remote' | 'relay' | 'cloud' | string;
   credentialKind?: 'none' | 'loopback_token' | 'device_credential' | 'user_session' | string;
   platformAccountId?: string | null;
   officialServiceKind?: 'relay' | 'cloud_studio' | 'inference' | 'billing' | string | null;
+  executionBoundary?: HanaExecutionBoundary;
   pluginId: string;
   bus: HanaEventBus;
   config?: HanaPluginConfigStore;
@@ -312,12 +343,14 @@ export interface HanaBusHandlerDefinition<
 
 export interface HanaPluginContext {
   serverId: string;
+  serverNodeId?: string;
   userId: string;
   studioId: string;
   connectionKind?: 'local' | 'lan' | 'custom_remote' | 'relay' | 'cloud' | string;
   credentialKind?: 'none' | 'loopback_token' | 'device_credential' | 'user_session' | string;
   platformAccountId?: string | null;
   officialServiceKind?: 'relay' | 'cloud_studio' | 'inference' | 'billing' | string | null;
+  executionBoundary?: HanaExecutionBoundary;
   pluginId: string;
   pluginDir: string;
   dataDir: string;

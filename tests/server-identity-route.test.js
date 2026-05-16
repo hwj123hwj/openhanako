@@ -74,6 +74,9 @@ describe("server identity route", () => {
     expect(await res.json()).toEqual({
       connectionKind: "local",
       serverId: "server_route",
+      serverNodeId: "server_route",
+      serverNodeKind: "local",
+      serverNodeTransport: "loopback",
       userId: "user_route",
       studioId: "studio_route",
       label: "Route Server",
@@ -84,6 +87,27 @@ describe("server identity route", () => {
       credentialKind: "loopback_token",
       platformAccountId: null,
       officialServiceKind: null,
+      executionBoundary: {
+        schemaVersion: 1,
+        boundaryId: "execb_server_route_studio_route",
+        kind: "local_process",
+        serverNodeId: "server_route",
+        studioId: "studio_route",
+        workbench: {
+          kind: "legacy_agent_workbench",
+          root: null,
+        },
+        sandbox: {
+          kind: "legacy_session_permission",
+          enforcedBy: "existing_runtime",
+        },
+        filesystem: {
+          policy: "legacy_workbench_scope",
+        },
+        network: {
+          policy: "local_runtime_default",
+        },
+      },
       capabilities: ["chat", "resources", "tools"],
       version: "1.2.3",
     });
@@ -117,6 +141,9 @@ describe("server identity route", () => {
       getRuntimeContext: () => ({
         connectionKind: "local",
         serverId: "server_runtime_route",
+        serverNodeId: "node_runtime_route",
+        serverNodeKind: "local",
+        serverNodeTransport: "loopback",
         userId: "user_runtime_route",
         studioId: "studio_runtime_route",
         label: "Runtime Route Server",
@@ -127,6 +154,17 @@ describe("server identity route", () => {
         credentialKind: "loopback_token",
         platformAccountId: null,
         officialServiceKind: null,
+        executionBoundary: {
+          schemaVersion: 1,
+          boundaryId: "execb_node_runtime_route_studio_runtime_route",
+          kind: "local_process",
+          serverNodeId: "node_runtime_route",
+          studioId: "studio_runtime_route",
+          workbench: { kind: "legacy_agent_workbench", root: null },
+          sandbox: { kind: "legacy_session_permission", enforcedBy: "existing_runtime" },
+          filesystem: { policy: "legacy_workbench_scope" },
+          network: { policy: "local_runtime_default" },
+        },
         capabilities: ["chat", "resources", "tools"],
         appVersion: "8.8.8",
       }),
@@ -138,6 +176,9 @@ describe("server identity route", () => {
     expect(await res.json()).toEqual({
       connectionKind: "local",
       serverId: "server_runtime_route",
+      serverNodeId: "node_runtime_route",
+      serverNodeKind: "local",
+      serverNodeTransport: "loopback",
       userId: "user_runtime_route",
       studioId: "studio_runtime_route",
       label: "Runtime Route Server",
@@ -148,6 +189,17 @@ describe("server identity route", () => {
       credentialKind: "loopback_token",
       platformAccountId: null,
       officialServiceKind: null,
+      executionBoundary: {
+        schemaVersion: 1,
+        boundaryId: "execb_node_runtime_route_studio_runtime_route",
+        kind: "local_process",
+        serverNodeId: "node_runtime_route",
+        studioId: "studio_runtime_route",
+        workbench: { kind: "legacy_agent_workbench", root: null },
+        sandbox: { kind: "legacy_session_permission", enforcedBy: "existing_runtime" },
+        filesystem: { policy: "legacy_workbench_scope" },
+        network: { policy: "local_runtime_default" },
+      },
       capabilities: ["chat", "resources", "tools"],
       version: "9.9.9",
     });

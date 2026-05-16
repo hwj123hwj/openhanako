@@ -10,12 +10,14 @@ export function createRequestContext(c, engine) {
     request,
     runtimeContext,
     serverId: runtimeContext?.serverId ?? null,
+    serverNodeId: runtimeContext?.serverNodeId ?? runtimeContext?.serverId ?? null,
     userId: runtimeContext?.userId ?? null,
     studioId: runtimeContext?.studioId ?? null,
     connectionKind: runtimeContext?.connectionKind ?? null,
     credentialKind: runtimeContext?.credentialKind ?? null,
     platformAccountId: runtimeContext?.platformAccountId ?? null,
     officialServiceKind: runtimeContext?.officialServiceKind ?? null,
+    executionBoundary: runtimeContext?.executionBoundary ?? null,
     authPrincipal: createAuthPrincipal(runtimeContext),
   });
 }
@@ -44,6 +46,7 @@ function createAuthPrincipal(runtimeContext) {
   return Object.freeze({
     kind: platformAccountId ? "platform_account" : "local_user",
     userId: runtimeContext.userId ?? null,
+    serverNodeId: runtimeContext.serverNodeId ?? runtimeContext.serverId ?? null,
     platformAccountId,
     connectionKind: runtimeContext.connectionKind ?? null,
     credentialKind: runtimeContext.credentialKind ?? null,

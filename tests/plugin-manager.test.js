@@ -94,12 +94,20 @@ describe("loadAll", () => {
   it("passes runtime scope into lifecycle and tool contexts", async () => {
     const runtimeContext = {
       serverId: "server_plugin",
+      serverNodeId: "node_plugin",
       userId: "user_plugin",
       studioId: "studio_plugin",
       connectionKind: "local",
       credentialKind: "loopback_token",
       platformAccountId: null,
       officialServiceKind: null,
+      executionBoundary: {
+        schemaVersion: 1,
+        boundaryId: "execb_node_plugin_studio_plugin",
+        kind: "local_process",
+        serverNodeId: "node_plugin",
+        studioId: "studio_plugin",
+      },
     };
     const dir = path.join(pluginsDir, "scope-plugin");
     fs.mkdirSync(path.join(dir, "tools"), { recursive: true });
@@ -113,6 +121,7 @@ describe("loadAll", () => {
         async onload() {
           globalThis.__hanaScopePluginLifecycle = {
             serverId: this.ctx.serverId,
+            serverNodeId: this.ctx.serverNodeId,
             userId: this.ctx.userId,
             studioId: this.ctx.studioId,
             connectionKind: this.ctx.connectionKind,
@@ -128,6 +137,7 @@ describe("loadAll", () => {
       export async function execute(_input, ctx) {
         return JSON.stringify({
           serverId: ctx.serverId,
+          serverNodeId: ctx.serverNodeId,
           userId: ctx.userId,
           studioId: ctx.studioId,
           sessionPath: ctx.sessionPath,
@@ -145,6 +155,7 @@ describe("loadAll", () => {
 
     expect(globalThis.__hanaScopePluginLifecycle).toEqual({
       serverId: "server_plugin",
+      serverNodeId: "node_plugin",
       userId: "user_plugin",
       studioId: "studio_plugin",
       connectionKind: "local",
@@ -156,6 +167,7 @@ describe("loadAll", () => {
     });
     expect(JSON.parse(result.content[0].text)).toEqual({
       serverId: "server_plugin",
+      serverNodeId: "node_plugin",
       userId: "user_plugin",
       studioId: "studio_plugin",
       sessionPath: "/sessions/plugin-scope.jsonl",

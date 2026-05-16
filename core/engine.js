@@ -20,6 +20,7 @@ import { migrateToProvidersYaml } from "./migrate-providers.js";
 import { migrateProviderMediaConfig } from "./provider-media-config.js";
 import { runMigrations } from "./migrations.js";
 import { createServerRuntimeContext } from "./server-runtime-context.js";
+import { createRuntimeExecutionBoundary } from "./execution-boundary.js";
 import { ResourceService } from "./resource-service.js";
 import { findModel } from "../shared/model-ref.js";
 import { resolveWorkspaceSkillPaths } from "../shared/workspace-skill-paths.js";
@@ -384,6 +385,10 @@ export class HanaEngine {
       throw new Error("server runtime context is not initialized");
     }
     return this._runtimeContext;
+  }
+
+  createExecutionBoundary(options = {}) {
+    return createRuntimeExecutionBoundary(this.getRuntimeContext(), options);
   }
 
   get terminalSessions() {
@@ -1339,9 +1344,19 @@ export class HanaEngine {
     }
     // Append plugin tools
     const pluginTools = this._pluginManager?.getAllTools() || [];
+    const executionBoundary = this._runtimeContext
+      ? this.createExecutionBoundary({ workbenchRoot: cwd })
+      : null;
+    const executionScope = executionBoundary
+      ? { serverNodeId: executionBoundary.serverNodeId, executionBoundary }
+      : {};
     const wrappedPluginTools = pluginTools.map(t => ({
       ...t,
-      execute: (toolCallId, params, runtimeCtx) => t.execute(toolCallId, params, { ...runtimeCtx, agentId }),
+      execute: (toolCallId, params, runtimeCtx) => t.execute(toolCallId, params, {
+        ...runtimeCtx,
+        agentId,
+        ...executionScope,
+      }),
     }));
     const pluginDevTools = this._pluginDevService && this._prefs.getPluginDevToolsEnabled?.() === true
       ? createPluginDevTools({
@@ -1391,6 +1406,7 @@ export class HanaEngine {
       workspace: effectiveWorkspace,
       workspaceFolders,
       hanakoHome: this.hanakoHome,
+      executionBoundary,
       getSandboxEnabled: () => this._readPreferences().sandbox !== false,
       getSandboxNetworkEnabled: () => this._readPreferences().sandbox_network === true,
       getExternalReadPaths,

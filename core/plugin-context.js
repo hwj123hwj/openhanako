@@ -10,12 +10,14 @@ export function createPluginContext({ pluginId, pluginDir, dataDir, bus, accessL
   const config = createPluginConfigStore({ dataDir, schema: configSchema });
   const runtimeScope = runtimeContext ? {
     serverId: runtimeContext.serverId,
+    serverNodeId: runtimeContext.serverNodeId ?? runtimeContext.serverId,
     userId: runtimeContext.userId,
     studioId: runtimeContext.studioId,
     connectionKind: runtimeContext.connectionKind,
     credentialKind: runtimeContext.credentialKind,
     platformAccountId: runtimeContext.platformAccountId ?? null,
     officialServiceKind: runtimeContext.officialServiceKind ?? null,
+    executionBoundary: clonePlain(runtimeContext.executionBoundary),
   } : {};
 
   const resolvedAccess = accessLevel || "restricted";
@@ -95,4 +97,9 @@ export function createPluginContext({ pluginId, pluginDir, dataDir, bus, accessL
     registerSessionFile,
     stageFile,
   };
+}
+
+function clonePlain(value) {
+  if (value === undefined) return undefined;
+  return JSON.parse(JSON.stringify(value));
 }

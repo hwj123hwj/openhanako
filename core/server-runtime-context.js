@@ -1,4 +1,5 @@
 import { loadServerIdentity } from "./server-identity.js";
+import { createRuntimeExecutionBoundary } from "./execution-boundary.js";
 
 const LOCAL_CAPABILITIES = ["chat", "resources", "tools"];
 
@@ -15,9 +16,12 @@ function deepFreeze(value) {
 
 export function createServerRuntimeContext({ hanakoHome, appVersion = "?" }) {
   const identity = loadServerIdentity(hanakoHome);
-  return deepFreeze({
+  const runtimeContext = {
     schemaVersion: 1,
     serverId: identity.serverId,
+    serverNodeId: identity.serverNodeId,
+    serverNodeKind: identity.serverNodeKind,
+    serverNodeTransport: identity.serverNodeTransport,
     userId: identity.userId,
     studioId: identity.studioId,
     label: identity.label,
@@ -35,13 +39,18 @@ export function createServerRuntimeContext({ hanakoHome, appVersion = "?" }) {
     officialServiceKind: null,
     capabilities: [...LOCAL_CAPABILITIES],
     appVersion,
-  });
+  };
+  runtimeContext.executionBoundary = createRuntimeExecutionBoundary(runtimeContext);
+  return deepFreeze(runtimeContext);
 }
 
 export function toServerIdentityResponse(runtimeContext, { appVersion } = {}) {
   return {
     connectionKind: runtimeContext.connectionKind,
     serverId: runtimeContext.serverId,
+    serverNodeId: runtimeContext.serverNodeId ?? runtimeContext.serverId,
+    serverNodeKind: runtimeContext.serverNodeKind ?? "local",
+    serverNodeTransport: runtimeContext.serverNodeTransport ?? "loopback",
     userId: runtimeContext.userId,
     studioId: runtimeContext.studioId,
     label: runtimeContext.label,
@@ -52,6 +61,7 @@ export function toServerIdentityResponse(runtimeContext, { appVersion } = {}) {
     credentialKind: runtimeContext.credentialKind,
     platformAccountId: runtimeContext.platformAccountId ?? null,
     officialServiceKind: runtimeContext.officialServiceKind ?? null,
+    executionBoundary: clonePlain(runtimeContext.executionBoundary),
     capabilities: [...runtimeContext.capabilities],
     version: appVersion || runtimeContext.appVersion || "?",
   };

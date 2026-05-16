@@ -35,22 +35,36 @@ describe("createPluginContext", () => {
       bus,
       runtimeContext: {
         serverId: "server_scope",
+        serverNodeId: "node_scope",
         userId: "user_scope",
         studioId: "studio_scope",
         connectionKind: "local",
         credentialKind: "loopback_token",
         platformAccountId: null,
         officialServiceKind: null,
+        executionBoundary: {
+          schemaVersion: 1,
+          boundaryId: "execb_node_scope_studio_scope",
+          kind: "local_process",
+          serverNodeId: "node_scope",
+          studioId: "studio_scope",
+        },
       },
     });
 
     expect(ctx.serverId).toBe("server_scope");
+    expect(ctx.serverNodeId).toBe("node_scope");
     expect(ctx.userId).toBe("user_scope");
     expect(ctx.studioId).toBe("studio_scope");
     expect(ctx.connectionKind).toBe("local");
     expect(ctx.credentialKind).toBe("loopback_token");
     expect(ctx.platformAccountId).toBeNull();
     expect(ctx.officialServiceKind).toBeNull();
+    expect(ctx.executionBoundary).toMatchObject({
+      boundaryId: "execb_node_scope_studio_scope",
+      serverNodeId: "node_scope",
+      studioId: "studio_scope",
+    });
   });
 
   it("config.get/set reads and writes plugin-data config.json", async () => {

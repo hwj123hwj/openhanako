@@ -19,9 +19,11 @@ export function loadServerIdentity(hanakoHome) {
 
   const defaultUser = users.users.find((user) => user.userId === users.defaultUserId);
   const defaultStudio = getDefaultStudio(studios);
+  const serverNodeScope = toServerNodeScope(serverNode);
 
   return {
     serverId: serverNode.serverId,
+    ...serverNodeScope,
     userId: defaultUser.userId,
     studioId: defaultStudio.studioId,
     label: serverNode.label,
@@ -128,9 +130,16 @@ function writeJsonAtomic(filePath, data) {
 }
 
 function createLocalServerNodeIdentity({ now }) {
+  const serverId = `server_${crypto.randomUUID()}`;
   return {
     schemaVersion: 1,
-    serverId: `server_${crypto.randomUUID()}`,
+    serverId,
+    serverNodeId: serverId,
+    nodeKind: "local",
+    transport: "loopback",
+    execution: {
+      kind: "local_process",
+    },
     label: "Local Hana",
     createdAt: now,
     updatedAt: now,
@@ -207,6 +216,21 @@ function validateServerNodeIdentity(value, label) {
   if (!isPlainObject(value)) throw new Error(`invalid ${label}: expected object`);
   if (value.schemaVersion !== 1) throw new Error(`invalid ${label}: schemaVersion must be 1`);
   if (!isNonEmptyString(value.serverId)) throw new Error(`invalid ${label}: serverId required`);
+  if (value.serverNodeId !== undefined && !isNonEmptyString(value.serverNodeId)) {
+    throw new Error(`invalid ${label}: serverNodeId must be a non-empty string`);
+  }
+  if (value.nodeKind !== undefined && !isNonEmptyString(value.nodeKind)) {
+    throw new Error(`invalid ${label}: nodeKind must be a non-empty string`);
+  }
+  if (value.transport !== undefined && !isNonEmptyString(value.transport)) {
+    throw new Error(`invalid ${label}: transport must be a non-empty string`);
+  }
+  if (value.execution !== undefined) {
+    if (!isPlainObject(value.execution)) throw new Error(`invalid ${label}: execution must be object`);
+    if (value.execution.kind !== undefined && !isNonEmptyString(value.execution.kind)) {
+      throw new Error(`invalid ${label}: execution.kind must be a non-empty string`);
+    }
+  }
   if (!isNonEmptyString(value.label)) throw new Error(`invalid ${label}: label required`);
 }
 
@@ -290,6 +314,14 @@ function validateIdentityRegistryLinks(users, studios) {
 
 function getDefaultStudio(studios) {
   return studios.studios.find((studio) => studio.studioId === studios.defaultStudioId);
+}
+
+function toServerNodeScope(serverNode) {
+  return {
+    serverNodeId: serverNode.serverNodeId || serverNode.serverId,
+    serverNodeKind: serverNode.nodeKind || serverNode.kind || "local",
+    serverNodeTransport: serverNode.transport || "loopback",
+  };
 }
 
 function isPlainObject(value) {

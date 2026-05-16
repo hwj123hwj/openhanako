@@ -11,10 +11,30 @@ export type StudioConnectionRegistry = ServerConnectionRegistry;
 
 export const LOCAL_CONNECTION_ID = 'local';
 
+export interface ExecutionBoundary {
+  schemaVersion: 1;
+  boundaryId: string;
+  kind: string;
+  serverNodeId: string;
+  studioId: string;
+  workbench?: {
+    kind: string;
+    root: string | null;
+    [key: string]: unknown;
+  };
+  sandbox?: Record<string, unknown>;
+  filesystem?: Record<string, unknown>;
+  network?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
 export interface ServerConnection {
   connectionId: string;
   kind: StudioConnectionKind;
   serverId: string;
+  serverNodeId?: string;
+  serverNodeKind?: string;
+  serverNodeTransport?: string;
   userId?: string;
   studioId: string;
   label: string;
@@ -29,12 +49,16 @@ export interface ServerConnection {
   credentialKind: ConnectionCredentialKind;
   platformAccountId?: string | null;
   officialServiceKind?: OfficialServiceKind | null;
+  executionBoundary?: ExecutionBoundary;
   capabilities: string[];
 }
 
 export interface ServerIdentity {
   connectionKind?: StudioConnectionKind;
   serverId: string;
+  serverNodeId?: string;
+  serverNodeKind?: string;
+  serverNodeTransport?: string;
   userId?: string;
   studioId: string;
   label: string;
@@ -45,6 +69,7 @@ export interface ServerIdentity {
   credentialKind?: ConnectionCredentialKind;
   platformAccountId?: string | null;
   officialServiceKind?: OfficialServiceKind | null;
+  executionBoundary?: ExecutionBoundary;
   capabilities?: string[];
   version?: string;
 }
@@ -211,10 +236,17 @@ export function mergeServerIdentity(
   connection: ServerConnection,
   identity: ServerIdentity,
 ): ServerConnection {
+  const nodeScope = {
+    ...(identity.serverNodeId !== undefined ? { serverNodeId: identity.serverNodeId } : {}),
+    ...(identity.serverNodeKind !== undefined ? { serverNodeKind: identity.serverNodeKind } : {}),
+    ...(identity.serverNodeTransport !== undefined ? { serverNodeTransport: identity.serverNodeTransport } : {}),
+    ...(identity.executionBoundary !== undefined ? { executionBoundary: identity.executionBoundary } : {}),
+  };
   const next = {
     ...connection,
     kind: identity.connectionKind || connection.kind,
     serverId: identity.serverId,
+    ...nodeScope,
     userId: identity.userId,
     studioId: identity.studioId,
     label: identity.label,
