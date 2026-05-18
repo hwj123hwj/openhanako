@@ -641,7 +641,7 @@ export function createSessionsRoute(engine, hub = null) {
           cwd || undefined,
           memFlag,
           undefined,
-          { workspaceFolders },
+          { workspaceFolders, visibleInSessionList: true },
         ));
       } else {
         ({ sessionPath: newSessionPath, agentId: newAgentId } = await engine.createSession(
@@ -649,7 +649,7 @@ export function createSessionsRoute(engine, hub = null) {
           cwd || undefined,
           memFlag,
           undefined,
-          { workspaceFolders },
+          { workspaceFolders, visibleInSessionList: true },
         ));
       }
       engine.persistSessionMeta();

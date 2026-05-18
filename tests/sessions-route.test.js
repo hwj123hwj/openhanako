@@ -144,7 +144,7 @@ describe("sessions route", () => {
       cwd,
       true,
       undefined,
-      { workspaceFolders: [extra] },
+      { workspaceFolders: [extra], visibleInSessionList: true },
     );
     expect(data.workspaceFolders).toEqual([extra]);
     expect(hub.eventBus.emit).toHaveBeenCalledWith(
