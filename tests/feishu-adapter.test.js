@@ -217,6 +217,155 @@ describe("createFeishuAdapter", () => {
     }));
   });
 
+  it("normalizes inbound post rich text into readable text and attachments", async () => {
+    const onMessage = vi.fn();
+
+    createFeishuAdapter({
+      appId: "app-id",
+      appSecret: "app-secret",
+      agentId: "hana",
+      onMessage,
+    });
+
+    await registeredHandlers["im.message.receive_v1"]({
+      message: {
+        message_id: "om_post_001",
+        message_type: "post",
+        content: JSON.stringify({
+          zh_cn: {
+            title: "标题",
+            content: [
+              [
+                { tag: "text", text: "你好 " },
+                { tag: "at", user_name: "小明", user_id: "ou_ming" },
+                { tag: "a", text: "链接", href: "https://example.com" },
+                { tag: "md", text: "**粗体**" },
+              ],
+              [
+                { tag: "img", image_key: "img_post_001" },
+                { tag: "media", file_key: "file_post_001", file_name: "clip.mp4", duration: 3000 },
+              ],
+            ],
+          },
+        }),
+        chat_id: "oc_fake_chat_001",
+        chat_type: "p2p",
+      },
+      sender: {
+        sender_type: "user",
+        sender_id: {
+          open_id: "ou_123",
+          user_id: "ou_123",
+        },
+      },
+    });
+
+    expect(onMessage).toHaveBeenCalledWith(expect.objectContaining({
+      text: "你好 @小明链接**粗体**",
+      attachments: [
+        expect.objectContaining({
+          type: "image",
+          platformRef: "img_post_001",
+          _messageId: "om_post_001",
+        }),
+        expect.objectContaining({
+          type: "video",
+          platformRef: "file_post_001",
+          filename: "clip.mp4",
+          duration: 3,
+          _messageId: "om_post_001",
+        }),
+      ],
+    }));
+  });
+
+  it("falls back to the first available post locale and keeps media-only posts", async () => {
+    const onMessage = vi.fn();
+
+    createFeishuAdapter({
+      appId: "app-id",
+      appSecret: "app-secret",
+      agentId: "hana",
+      onMessage,
+    });
+
+    await registeredHandlers["im.message.receive_v1"]({
+      message: {
+        message_id: "om_post_002",
+        message_type: "post",
+        content: JSON.stringify({
+          ja_jp: {
+            content: [
+              [{ tag: "img", image_key: "img_only_001" }],
+            ],
+          },
+        }),
+        chat_id: "oc_fake_chat_001",
+        chat_type: "p2p",
+      },
+      sender: {
+        sender_type: "user",
+        sender_id: {
+          open_id: "ou_123",
+          user_id: "ou_123",
+        },
+      },
+    });
+
+    expect(onMessage).toHaveBeenCalledWith(expect.objectContaining({
+      text: "",
+      attachments: [
+        expect.objectContaining({
+          type: "image",
+          platformRef: "img_only_001",
+          _messageId: "om_post_002",
+        }),
+      ],
+    }));
+  });
+
+  it("surfaces unsupported Feishu message content instead of silently dropping it", async () => {
+    const onMessage = vi.fn();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    createFeishuAdapter({
+      appId: "app-id",
+      appSecret: "app-secret",
+      agentId: "hana",
+      onMessage,
+    });
+
+    await registeredHandlers["im.message.receive_v1"]({
+      message: {
+        message_id: "om_unknown_001",
+        message_type: "post",
+        content: JSON.stringify({
+          zh_cn: {
+            content: [
+              [{ tag: "widget", text: "hidden" }],
+            ],
+          },
+        }),
+        chat_id: "oc_fake_chat_001",
+        chat_type: "p2p",
+      },
+      sender: {
+        sender_type: "user",
+        sender_id: {
+          open_id: "ou_123",
+          user_id: "ou_123",
+        },
+      },
+    });
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("Unsupported Feishu post tag: widget"));
+    expect(onMessage).toHaveBeenCalledWith(expect.objectContaining({
+      text: "[Unsupported Feishu post tag: widget]",
+    }));
+
+    warn.mockRestore();
+  });
+
   it("downloads inbound images via message resource API", async () => {
     const imageBuffer = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
     mockMessageResourceGet.mockResolvedValue({
