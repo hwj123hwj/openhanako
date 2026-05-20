@@ -35,7 +35,7 @@ import { formatWorkspaceScopePrompt, normalizeWorkspaceScope } from "../shared/w
 import { getProviderPromptPatches } from "./provider-prompt-patches.js";
 import { prepareVisionInputForTextOnlyModel } from "./vision-prepare.js";
 import { prepareModelImageInputsForPrompt } from "./model-image-preprocess.js";
-import { adaptVisualContextMessages } from "./visual-context-pipeline.js";
+import { createVisionContextInjectionExtension } from "./vision-context-injector.js";
 import { modelSupportsDirectVideoInput, modelSupportsVideoInput } from "../shared/model-capabilities.js";
 import {
   normalizeSessionThinkingLevel,
@@ -556,53 +556,35 @@ export class SessionCoordinator {
       agentsFilesResult: agentsFilesResultSnapshot,
     };
 
+    const sessionPathRef = { current: sessionPathForMeta };
+    const targetModelRef = { current: promptPatchModel || effectiveModel || null };
+    const warnVisionContextInjection = (entry) => {
+      if (typeof entry === "string") {
+        log.warn(entry);
+        return;
+      }
+      log.warn(`vision context injection diagnostic: ${JSON.stringify(entry)}`);
+    };
+
     // Vision 辅助注入扩展：只在目标模型需要图片辅助笔记时注入视觉上下文。
+    // 注入器由 Hana 持有 session/model 引用，不读取 Pi SDK ctx，避免 restore 后 stale ctx 丢失 sidecar 笔记。
     // 用户当前 UI 视野不再自动注入；需要时由 current_status(ui_context) 显式查询。
     const getEngine = this._d.getEngine;
-    const visionAuxiliaryExtension = {
+    const visionAuxiliaryExtension = createVisionContextInjectionExtension({
       path: "hana-desktop-vision-context-injection",
-      tools: new Map(),
-      handlers: new Map([
-        [
-          "context",
-          [
-            async (event, ctx) => {
-              try {
-                const engine = getEngine?.();
-                if (!engine?.isVisionAuxiliaryEnabled?.()) return undefined;
-                const bridge = engine?.getVisionBridge?.();
-                if (!bridge) return undefined;
-                const sp = ctx.sessionManager?.getSessionFile?.();
-                const adapted = await adaptVisualContextMessages({
-                  messages: event.messages,
-                  sessionPath: sp,
-                  targetModel: ctx?.model,
-                  visionBridge: bridge,
-                  isVisionAuxiliaryEnabled: () => engine.isVisionAuxiliaryEnabled?.() === true,
-                  resolveSessionFile: ({ fileId, filePath, sessionPath }) => {
-                    const lookupSessionPath = sessionPath || sp || null;
-                    if (fileId) return engine.getSessionFile?.(fileId, { sessionPath: lookupSessionPath });
-                    if (filePath) return engine.getSessionFileByPath?.(filePath, { sessionPath: lookupSessionPath });
-                    return null;
-                  },
-                  warn: (msg) => log.warn(msg),
-                });
-                const injectedNotes = bridge.injectNotes(adapted.messages, sp);
-                if (!adapted.injected && !injectedNotes.injected) return undefined;
-                return { messages: injectedNotes.messages };
-              } catch (err) {
-                log.warn(`vision context injection failed: ${err?.message || err}`);
-                return undefined;
-              }
-            },
-          ],
-        ],
-      ]),
-      flags: new Map(),
-      shortcuts: new Map(),
-      commands: new Map(),
-      messageRenderers: new Map(),
-    };
+      sessionPathRef,
+      targetModelRef,
+      getVisionBridge: () => getEngine?.()?.getVisionBridge?.(),
+      isVisionAuxiliaryEnabled: () => getEngine?.()?.isVisionAuxiliaryEnabled?.() === true,
+      resolveSessionFile: ({ fileId, filePath, sessionPath }) => {
+        const engine = getEngine?.();
+        const lookupSessionPath = sessionPath || sessionPathRef.current || null;
+        if (fileId) return engine?.getSessionFile?.(fileId, { sessionPath: lookupSessionPath });
+        if (filePath) return engine?.getSessionFileByPath?.(filePath, { sessionPath: lookupSessionPath });
+        return null;
+      },
+      warn: warnVisionContextInjection,
+    });
 
     // Wrap resourceLoader: per-session prompt snapshot + plan mode injection + vision auxiliary extension
     const resourceLoaderProps = {
@@ -674,6 +656,8 @@ export class SessionCoordinator {
 
     // 事件转发（附带 agentId，供订阅者按 agent 过滤）
     const sessionPath = session.sessionManager?.getSessionFile?.();
+    sessionPathRef.current = sessionPath || sessionPathRef.current || null;
+    targetModelRef.current = resolvedModel || targetModelRef.current || null;
     this._session = session;
     this._currentSessionPath = sessionPath || null;
     this._sessionStarted = false;

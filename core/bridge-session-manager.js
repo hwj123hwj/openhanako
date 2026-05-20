@@ -15,7 +15,7 @@ import { findModel } from "../shared/model-ref.js";
 import { teardownSessionResources } from "./session-teardown.js";
 import { isAbortLikeError, prepareVisionInputForTextOnlyModel } from "./vision-prepare.js";
 import { prepareModelImageInputsForPrompt } from "./model-image-preprocess.js";
-import { adaptVisualContextMessages } from "./visual-context-pipeline.js";
+import { withVisionContextInjectionExtension } from "./vision-context-injector.js";
 import { SESSION_PERMISSION_MODES } from "./session-permission-mode.js";
 import { collectMediaItems } from "../lib/tools/media-details.js";
 import { materializeBridgeInboundFiles } from "../lib/session-files/bridge-inbound-files.js";
@@ -81,53 +81,12 @@ function zeroUsage() {
   };
 }
 
-function withVisionExtension(resourceLoader, getBridge, getSessionPath, isEnabled, warn, resolveSessionFile) {
-  return Object.create(resourceLoader, {
-    getExtensions: {
-      value: () => {
-        const base = resourceLoader.getExtensions?.() ?? { extensions: [], errors: [] };
-        const extension = {
-          path: "hana-vision-context-injection",
-          tools: new Map(),
-          handlers: new Map([
-            [
-              "context",
-              [
-                async (event, ctx) => {
-                  try {
-                    if (isEnabled?.() !== true) return undefined;
-                    const bridge = getBridge?.();
-                    if (!bridge) return undefined;
-                    const sessionPath = getSessionPath?.() || null;
-                    const adapted = await adaptVisualContextMessages({
-                      messages: event.messages,
-                      sessionPath,
-                      targetModel: ctx?.model,
-                      visionBridge: bridge,
-                      isVisionAuxiliaryEnabled: () => isEnabled?.() === true,
-                      resolveSessionFile,
-                      warn,
-                    });
-                    const injectedNotes = bridge.injectNotes(adapted.messages, sessionPath);
-                    if (!adapted.injected && !injectedNotes.injected) return undefined;
-                    return { messages: injectedNotes.messages };
-                  } catch (err) {
-                    warn?.(`vision context injection failed: ${err?.message || err}`);
-                    return undefined;
-                  }
-                },
-              ],
-            ],
-          ]),
-          flags: new Map(),
-          shortcuts: new Map(),
-          commands: new Map(),
-          messageRenderers: new Map(),
-        };
-        return { ...base, extensions: [extension, ...(base.extensions || [])] };
-      },
-    },
-  });
+function warnVisionContextInjection(entry) {
+  if (typeof entry === "string") {
+    console.warn(`[bridge-session] ${entry}`);
+    return;
+  }
+  console.warn(`[bridge-session] vision context injection diagnostic: ${JSON.stringify(entry)}`);
 }
 
 /**
@@ -473,6 +432,7 @@ export class BridgeSessionManager {
 
       let sessionOpts;
       const sessionPathRef = { current: null };
+      const targetModelRef = { current: null };
       // 工具 details.media 收集器（被动提取 tool_execution_end 事件）
       const toolMediaUrls = [];
 
@@ -486,19 +446,20 @@ export class BridgeSessionManager {
         const tempResourceLoader = Object.create(this._deps.getResourceLoader());
         tempResourceLoader.getSystemPrompt = () => guestPrompt;
         tempResourceLoader.getSkills = () => ({ skills: [], diagnostics: [] });
-        const guestResourceLoader = withVisionExtension(
-          tempResourceLoader,
-          () => this._deps.getVisionBridge?.(),
-          () => sessionPathRef.current,
-          () => this._deps.isVisionAuxiliaryEnabled?.() === true,
-          (msg) => console.warn(`[bridge-session] ${msg}`),
-          ({ fileId, filePath, sessionPath }) => {
+        const guestResourceLoader = withVisionContextInjectionExtension(tempResourceLoader, {
+          path: "hana-vision-context-injection",
+          sessionPathRef,
+          targetModelRef,
+          getVisionBridge: () => this._deps.getVisionBridge?.(),
+          isVisionAuxiliaryEnabled: () => this._deps.isVisionAuxiliaryEnabled?.() === true,
+          warn: warnVisionContextInjection,
+          resolveSessionFile: ({ fileId, filePath, sessionPath }) => {
             const lookupSessionPath = sessionPath || sessionPathRef.current || null;
             if (fileId) return this._deps.getSessionFile?.(fileId, { sessionPath: lookupSessionPath });
             if (filePath) return this._deps.getSessionFileByPath?.(filePath, { sessionPath: lookupSessionPath });
             return null;
           },
-        );
+        });
 
         // 使用 agent 配置的模型，而非 defaultModel。
         // migration #5 之后 models.chat 必为 {id, provider} 对象；缺 provider 视为未配置。
@@ -511,6 +472,7 @@ export class BridgeSessionManager {
         if (!chatModel) {
           throw new Error(t("error.bridgeAgentModelNotAvailable", { name: agent.agentName, model: `${ref.provider}/${ref.id}` }));
         }
+        targetModelRef.current = chatModel;
 
         sessionOpts = {
           model: chatModel,
@@ -522,7 +484,7 @@ export class BridgeSessionManager {
         };
       } else {
         // owner 模式：完整 agent。抽出 _buildOwnerSessionOpts 后，compactSession 也能复用同一构造逻辑
-        sessionOpts = this._buildOwnerSessionOpts(agent, mm, homeCwd, sessionPathRef, { bridgeContext });
+        sessionOpts = this._buildOwnerSessionOpts(agent, mm, homeCwd, sessionPathRef, targetModelRef, { bridgeContext });
       }
 
       const { session } = await createAgentSession({
@@ -535,6 +497,7 @@ export class BridgeSessionManager {
 
       const activeSessionPath = session.sessionManager?.getSessionFile?.() || null;
       sessionPathRef.current = activeSessionPath;
+      targetModelRef.current = session.model || sessionOpts.model || targetModelRef.current || null;
       this._rememberBridgeContext(activeSessionPath, bridgeContext);
       this._activeSessions.set(sessionKey, session);
 
@@ -793,7 +756,7 @@ export class BridgeSessionManager {
    * @param {string} homeCwd
    * @returns {object} sessionOpts for createAgentSession
    */
-  _buildOwnerSessionOpts(agent, mm, homeCwd, sessionPathRef = { current: null }, opts = {}) {
+  _buildOwnerSessionOpts(agent, mm, homeCwd, sessionPathRef = { current: null }, targetModelRef = { current: null }, opts = {}) {
     const prefs = this._deps.getPreferences();
     const bridgeReadOnly = prefs?.bridge?.readOnly === true;
     const bridgePermissionMode = bridgeReadOnly
@@ -826,6 +789,7 @@ export class BridgeSessionManager {
     if (!ownerModel) {
       throw new Error(t("error.bridgeAgentModelNotAvailable", { name: agent.agentName, model: `${ref.provider}/${ref.id}` }));
     }
+    targetModelRef.current = ownerModel;
 
     // 快照 prompt，隔离于其他 session 的 prompt 变更（与 SessionCoordinator.createSession 一致）。
     // 显式按 master 开关构建：bridge owner 是独立链路，不应受桌面端某个 session
@@ -841,19 +805,20 @@ export class BridgeSessionManager {
     const ownerResourceLoader = Object.create(this._deps.getResourceLoader(), {
       getSystemPrompt: { value: () => ownerPromptSnapshot },
     });
-    const visionResourceLoader = withVisionExtension(
-      ownerResourceLoader,
-      () => this._deps.getVisionBridge?.(),
-      () => sessionPathRef.current,
-      () => this._deps.isVisionAuxiliaryEnabled?.() === true,
-      (msg) => console.warn(`[bridge-session] ${msg}`),
-      ({ fileId, filePath, sessionPath }) => {
+    const visionResourceLoader = withVisionContextInjectionExtension(ownerResourceLoader, {
+      path: "hana-vision-context-injection",
+      sessionPathRef,
+      targetModelRef,
+      getVisionBridge: () => this._deps.getVisionBridge?.(),
+      isVisionAuxiliaryEnabled: () => this._deps.isVisionAuxiliaryEnabled?.() === true,
+      warn: warnVisionContextInjection,
+      resolveSessionFile: ({ fileId, filePath, sessionPath }) => {
         const lookupSessionPath = sessionPath || sessionPathRef.current || null;
         if (fileId) return this._deps.getSessionFile?.(fileId, { sessionPath: lookupSessionPath });
         if (filePath) return this._deps.getSessionFileByPath?.(filePath, { sessionPath: lookupSessionPath });
         return null;
       },
-    );
+    });
 
     return {
       model: ownerModel,
@@ -913,7 +878,7 @@ export class BridgeSessionManager {
     const freshContext = opts.fresh === true
       ? this._buildOwnerFreshCompactContext(agent, homeCwd)
       : null;
-    const sessionOpts = this._buildOwnerSessionOpts(agent, mm, homeCwd, { current: sessionFilePath }, {
+    const sessionOpts = this._buildOwnerSessionOpts(agent, mm, homeCwd, { current: sessionFilePath }, { current: null }, {
       ownerPromptSnapshot: freshContext?.systemPrompt,
     });
 
