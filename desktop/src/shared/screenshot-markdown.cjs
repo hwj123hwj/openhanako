@@ -174,14 +174,21 @@ function clampHeight(value) {
   return Math.min(720, Math.max(160, Math.round(number)));
 }
 
+function clampWidth(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 100;
+  return Math.min(100, Math.max(40, Math.round(number)));
+}
+
 function renderScreenshotMarkdownCover(cover, sourceFilePath) {
   if (!cover?.image) return "";
   const src = resolveScreenshotMarkdownImageSrc(cover.image, { sourceFilePath });
   if (!src) return "";
+  const width = clampWidth(cover.displayWidth);
   const height = clampHeight(cover.displayHeight);
   const positionX = clampPercent(cover.positionX, 50);
   const positionY = clampPercent(cover.positionY, 50);
-  return `<figure class="screenshot-cover" style="height:${height}px"><img src="${escapeAttr(src)}" style="object-position:${positionX}% ${positionY}%" /></figure>`;
+  return `<figure class="screenshot-cover" style="--screenshot-cover-display-width:${width}%;--screenshot-cover-height:${height}px"><div class="screenshot-cover-frame"><img src="${escapeAttr(src)}" style="object-position:${positionX}% ${positionY}%" /></div></figure>`;
 }
 
 function renderScreenshotMarkdownArticle(md, markdown, options = {}) {

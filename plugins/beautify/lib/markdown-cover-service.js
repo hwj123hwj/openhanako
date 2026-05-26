@@ -6,7 +6,10 @@ import { atomicWriteSync } from "../../../shared/safe-fs.js";
 export const MARKDOWN_ATTACHMENT_DIR_NAME = "文本附件";
 
 const FRONT_MATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
-const SUPPORTED_IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
+const SUPPORTED_IMAGE_EXTS = new Set([
+  ".png", ".jpg", ".jpeg", ".webp", ".gif",
+  ".bmp", ".avif", ".svg", ".tif", ".tiff", ".heic", ".heif",
+]);
 
 function assertAbsoluteFilePath(label, filePath) {
   if (typeof filePath !== "string" || !path.isAbsolute(filePath)) {

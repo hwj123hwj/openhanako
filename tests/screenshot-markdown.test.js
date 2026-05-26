@@ -35,6 +35,7 @@ describe('screenshot markdown renderer helpers', () => {
       '---',
       'cover:',
       '  image: 文本附件/cover.png',
+      '  displayWidth: 72',
       '  displayHeight: 280',
       '  positionY: 64',
       '---',
@@ -43,7 +44,9 @@ describe('screenshot markdown renderer helpers', () => {
 
     expect(md.render).toHaveBeenCalledWith('# Demo', { sourceFilePath: '/vault/notes/day.md' });
     expect(html).toContain('class="screenshot-cover"');
-    expect(html).toContain('height:280px');
+    expect(html).toContain('--screenshot-cover-display-width:72%');
+    expect(html).toContain('--screenshot-cover-height:280px');
+    expect(html).toContain('class="screenshot-cover-frame"');
     expect(html).toContain('object-position:50% 64%');
     expect(html).toContain('file:///vault/notes/%E6%96%87%E6%9C%AC%E9%99%84%E4%BB%B6/cover.png');
   });

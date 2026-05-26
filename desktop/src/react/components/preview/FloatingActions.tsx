@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import styles from './FloatingActions.module.css';
 import {
+  applyMarkdownCoverImage,
   dispatchCoverNotice,
   requestMarkdownCoverGeneration,
 } from '../../utils/markdown-cover-generation';
 import { hanaFetch } from '../../hooks/use-hana-fetch';
 import { useStore } from '../../stores';
+import { extOfName, inferKindByExt } from '../../utils/file-kind';
 
 interface Props {
   content: string;
@@ -28,11 +30,23 @@ export function FloatingActions({
 }: Props) {
   const [copyLabel, setCopyLabel] = useState<string | null>(null);
   const [coverBusy, setCoverBusy] = useState(false);
+  const [coverMenuOpen, setCoverMenuOpen] = useState(false);
   const [coverToolEnabled, setCoverToolEnabled] = useState(false);
   const currentAgentId = useStore(s => s.currentAgentId);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const coverMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+
+  useEffect(() => {
+    if (!coverMenuOpen) return;
+    const close = (event: PointerEvent) => {
+      if (coverMenuRef.current?.contains(event.target as Node)) return;
+      setCoverMenuOpen(false);
+    };
+    window.addEventListener('pointerdown', close, true);
+    return () => window.removeEventListener('pointerdown', close, true);
+  }, [coverMenuOpen]);
 
   useEffect(() => {
     if (contentType !== 'markdown' || !filePath || !currentAgentId) {
@@ -74,6 +88,7 @@ export function FloatingActions({
 
   const handleGenerateCover = useCallback(async () => {
     if (!filePath || contentType !== 'markdown') return;
+    setCoverMenuOpen(false);
     setCoverBusy(true);
     try {
       const result = await requestMarkdownCoverGeneration({ filePath });
@@ -88,6 +103,36 @@ export function FloatingActions({
     }
   }, [contentType, filePath]);
 
+  const handleUploadCover = useCallback(async () => {
+    if (!filePath || contentType !== 'markdown') return;
+    setCoverMenuOpen(false);
+    const paths = await window.platform?.selectFiles?.();
+    const imageFilePath = paths?.[0];
+    if (!imageFilePath) return;
+    const kind = inferKindByExt(extOfName(imageFilePath));
+    if (kind !== 'image' && kind !== 'svg') {
+      dispatchCoverNotice('请选择图片文件作为 cover。', 'error');
+      return;
+    }
+    setCoverBusy(true);
+    try {
+      const result = await applyMarkdownCoverImage({ filePath, imageFilePath });
+      dispatchCoverNotice(
+        result.ok ? '已应用上传图片为 cover。' : `Cover 应用失败：${result.error}`,
+        result.ok ? 'success' : 'error',
+      );
+    } catch (err) {
+      dispatchCoverNotice(`Cover 应用失败：${err instanceof Error ? err.message : String(err)}`, 'error');
+    } finally {
+      setCoverBusy(false);
+    }
+  }, [contentType, filePath]);
+
+  const handlePresetCover = useCallback(() => {
+    setCoverMenuOpen(false);
+    dispatchCoverNotice('系统预制头图稍后开放。', 'error');
+  }, []);
+
   const t = window.t ?? ((p: string) => p);
 
   return (
@@ -100,20 +145,29 @@ export function FloatingActions({
         <span>{copyLabel ?? t('attach.copy')}</span>
       </button>
       {contentType === 'markdown' && filePath && coverToolEnabled && (
-        <button
-          className={`${styles.actionBtn}${coverBusy ? ` ${styles.actionBtnBusy}` : ''}`}
-          onClick={handleGenerateCover}
-          title="生成 cover"
-          aria-label="生成 cover"
-          disabled={coverBusy}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 20h5l10-10a3 3 0 0 0-5-5L4 15v5z" />
-            <path d="M13.5 6.5l4 4" />
-            <path d="M4 15l5 5" />
-          </svg>
-        </button>
+        <div className={styles.coverActionWrap} ref={coverMenuRef}>
+          <button
+            className={`${styles.actionBtn}${coverBusy ? ` ${styles.actionBtnBusy}` : ''}${coverMenuOpen ? ` ${styles.actionBtnActive}` : ''}`}
+            onClick={() => setCoverMenuOpen(open => !open)}
+            title="制作 cover"
+            aria-label="制作 cover"
+            disabled={coverBusy}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 20h5l10-10a3 3 0 0 0-5-5L4 15v5z" />
+              <path d="M13.5 6.5l4 4" />
+              <path d="M4 15l5 5" />
+            </svg>
+          </button>
+          {coverMenuOpen && (
+            <div className={styles.coverMenu}>
+              <button type="button" onClick={handleGenerateCover}>AI 生成</button>
+              <button type="button" onClick={handlePresetCover}>系统预制</button>
+              <button type="button" onClick={handleUploadCover}>自己上传</button>
+            </div>
+          )}
+        </div>
       )}
       {showMarkdownPreviewToggle && (
         <button

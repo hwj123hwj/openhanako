@@ -24,17 +24,26 @@ describe("beautify create-cover tool", () => {
     const request = vi.fn(async () => {
       throw new Error("unexpected bus request");
     });
+    const emit = vi.fn();
     const result = await execute({
       targetFilePath: notePath,
       generatedFilePath: imagePath,
       pixelWidth: 1536,
       pixelHeight: 1024,
     }, {
-      bus: { request },
+      bus: { request, emit },
       sessionPath: path.join(tmpDir, "session.jsonl"),
     });
 
     expect(request).not.toHaveBeenCalled();
+    expect(emit).toHaveBeenCalledWith({
+      type: "app_event",
+      event: {
+        type: "markdown-cover-updated",
+        payload: { filePath: notePath },
+        source: "server",
+      },
+    }, null);
     expect(result.content[0].text).toContain("已把图片应用为 Markdown cover");
     expect(result.details.beautifyCover.cover).toMatchObject({
       image: expect.stringMatching(/^文本附件\/note-cover-/),

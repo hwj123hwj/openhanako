@@ -27,6 +27,7 @@ import { languages } from '@codemirror/language-data';
 import { markdownHighlight, codeHighlight } from '../editor/highlight';
 import { markdownTheme, codeTheme } from '../editor/theme';
 import { markdownBlockDecoField, markdownDecoPlugin, markdownImageContextFacet } from '../editor/md-decorations';
+import { markdownCoverField } from '../editor/cover-field';
 import { mermaidDecoField } from '../editor/mermaid-field';
 import { linkClickHandler } from '../editor/link-handler';
 import { tableDecoField } from '../editor/table-field';
@@ -41,6 +42,10 @@ import {
   clearAppFileDragPayload,
   readAppFileDragPayload,
 } from '../utils/app-file-drag';
+import {
+  isMarkdownCoverOnlyUpdate,
+  mergeMarkdownCoverIntoDocument,
+} from '../utils/markdown-cover';
 import type { FileVersion, VersionedWriteResult } from '../types';
 
 /* ── Types ── */
@@ -423,6 +428,50 @@ export const PreviewEditor = forwardRef<PreviewEditorHandle, PreviewEditorProps>
       drainSaveQueue();
     }, [drainSaveQueue]);
 
+    const applyIncomingContent = useCallback((nextContent: string, options: { publish?: boolean } = {}) => {
+      const view = viewRef.current;
+      if (!view) return;
+      const current = view.state.doc.toString();
+      if (current === nextContent) {
+        if (options.publish) lastSavedContentRef.current = nextContent;
+        return;
+      }
+
+      const hasLocalUnsavedEdits = !readOnly && current !== lastSavedContentRef.current;
+      if (hasLocalUnsavedEdits) {
+        const merged = mode === 'markdown' && isMarkdownCoverOnlyUpdate(lastSavedContentRef.current, nextContent)
+          ? mergeMarkdownCoverIntoDocument(current, nextContent)
+          : null;
+        if (merged) {
+          docRevisionRef.current += 1;
+          const revision = docRevisionRef.current;
+          if (saveTimerRef.current) {
+            clearTimeout(saveTimerRef.current);
+            saveTimerRef.current = null;
+          }
+          lastSavedContentRef.current = nextContent;
+          replaceDocumentPreservingSelection(view, merged);
+          contentCbRef.current?.(merged);
+          saveToFile(merged, revision);
+          return;
+        }
+
+        showSaveError('settings.fileChangedOnDisk', 'local edits are not saved yet');
+        return;
+      }
+
+      docRevisionRef.current += 1;
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      lastSavedContentRef.current = nextContent;
+      replaceDocumentPreservingSelection(view, nextContent);
+      if (options.publish) {
+        contentCbRef.current?.(nextContent, diskVersionRef.current);
+      }
+    }, [mode, readOnly, saveToFile]);
+
     // Create editor
     useEffect(() => {
       if (!containerRef.current) return;
@@ -511,6 +560,7 @@ export const PreviewEditor = forwardRef<PreviewEditorHandle, PreviewEditorProps>
             getFileUrl: window.platform?.getFileUrl,
           }),
           markdownDecoPlugin,
+          markdownCoverField,
           markdownBlockDecoField,
           mermaidDecoField,
         ] : []),
@@ -542,18 +592,8 @@ export const PreviewEditor = forwardRef<PreviewEditorHandle, PreviewEditorProps>
 
     // content prop change → update editor (skip if already in sync)
     useEffect(() => {
-      const view = viewRef.current;
-      if (!view) return;
-      const current = view.state.doc.toString();
-      if (current !== content) {
-        docRevisionRef.current += 1;
-        if (saveTimerRef.current) {
-          clearTimeout(saveTimerRef.current);
-          saveTimerRef.current = null;
-        }
-        replaceDocumentPreservingSelection(view, content);
-      }
-    }, [content]);
+      applyIncomingContent(content);
+    }, [content, applyIncomingContent]);
 
     // File watching（只读模式下由调用方自理，这里跳过避免重复监听）
     useEffect(() => {
@@ -577,18 +617,7 @@ export const PreviewEditor = forwardRef<PreviewEditorHandle, PreviewEditorProps>
               lastSavedContentRef.current = newContent;
               return;
             }
-            const view = viewRef.current;
-            if (!view) return;
-            const current = view.state.doc.toString();
-            if (current === newContent) return;
-            docRevisionRef.current += 1;
-            if (saveTimerRef.current) {
-              clearTimeout(saveTimerRef.current);
-              saveTimerRef.current = null;
-            }
-            lastSavedContentRef.current = newContent;
-            replaceDocumentPreservingSelection(view, newContent);
-            contentCbRef.current?.(newContent, diskVersionRef.current);
+            applyIncomingContent(newContent, { publish: true });
           })
           .catch((err) => {
             console.warn('[PreviewEditor] reload watched file failed:', err);
@@ -600,7 +629,7 @@ export const PreviewEditor = forwardRef<PreviewEditorHandle, PreviewEditorProps>
         _fileChangeEmitter.removeEventListener('change', handler);
         window.platform?.unwatchFile(filePath);
       };
-    }, [filePath, readOnly]);
+    }, [filePath, readOnly, applyIncomingContent]);
 
     return <div className={`preview-editor mode-${mode}`} ref={containerRef} />;
   },

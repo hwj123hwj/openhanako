@@ -277,7 +277,12 @@ function MarkdownCoverView({ previewItem, cover }: { previewItem: PreviewItem; c
   return (
     <div
       className="markdown-cover"
-      style={{ height: `${layout.displayHeight}px` }}
+      style={{
+        width: `${layout.displayWidth}%`,
+        height: `${layout.displayHeight}px`,
+        marginLeft: 'auto',
+        marginRight: 'auto',
+      }}
       onContextMenu={(event) => {
         event.preventDefault();
         setMenu({ x: event.clientX, y: event.clientY });

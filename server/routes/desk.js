@@ -15,6 +15,9 @@ import { parseSkillMetadata } from "../../lib/skills/skill-metadata.js";
 import { installSkillPackageFromPath } from "../../lib/skills/skill-package-installer.js";
 import { WORKSPACE_SKILL_DIRS } from "../../shared/workspace-skill-paths.js";
 import { DEFAULT_DISABLED_TOOL_NAMES } from "../../shared/tool-categories.js";
+import { applyMarkdownCoverFromGeneratedFile } from "../../plugins/beautify/lib/markdown-cover-service.js";
+import { buildCoverStyleGuideForAgent } from "../../plugins/beautify/lib/cover-style-guide.js";
+import { emitAppEvent } from "../app-events.js";
 import { t } from "../i18n.js";
 import { realPath, isSensitivePath } from "../utils/path-security.js";
 import { readAuthPrincipal } from "../http/capability-guard.js";
@@ -256,9 +259,7 @@ export function createDeskRoute(engine, hub) {
   }
 
   function buildBeautifyCoverPrompt({ filePath, themeTone, userGuidance }) {
-    const themeGuidance = themeTone === "dark"
-      ? "深色主题：低照度、克制高光、暗部仍保留纸张纤维和材料层次。"
-      : "浅色主题：柔和暖光、低对比、干净留白、纸面纤维清晰。";
+    const styleGuide = buildCoverStyleGuideForAgent({ themeTone, userGuidance });
     return [
       "这是一个由编辑器 UI 按钮发起的 Beautify 后台任务，目标 Markdown 路径已经由按钮明确给出。",
       `目标文件：${filePath}`,
@@ -273,10 +274,7 @@ export function createDeskRoute(engine, hub) {
       `   - targetFilePath: ${filePath}`,
       "   - generatedFilePath: <上一步生成图片的绝对路径>",
       "",
-      "画面方向：现代 Anime 风格的精致动画电影 key visual，强纸张质感、印刷纹理、细腻颗粒、温润材料感；根据文章内容提炼意象主题，尽量通过真实场景、人物动作、光线、道具关系、环境痕迹来表达，而不是堆砌漂浮符号。",
-      "审美要求：有电影感、有故事感、有文学气息；星空和幻想感可以出现，但必须由场景自然承载，有现实重量和情感理由。",
-      themeGuidance,
-      userGuidance ? `用户补充方向：${userGuidance}` : "",
+      styleGuide,
       "",
       "边界：Beautify 工具只负责把已有图片复制到附件文件夹并写入 cover frontmatter。图片来源未来也可以是内置头图库或用户本地图片，但当前按钮任务默认走生图工具。不要用 Beautify 工具生成提示词或提交生图任务，不要把生图 prompt、模型、provider、生成时间写进 Markdown。",
       "完成后用一句话说明图片已经应用为 cover，或说明失败原因。",
@@ -306,6 +304,34 @@ export function createDeskRoute(engine, hub) {
     return !disabled.includes(BEAUTIFY_OPTIONAL_TOOL_NAME);
   }
 
+  function validateBeautifyMarkdownFilePath(filePath) {
+    if (!filePath || !path.isAbsolute(filePath)) {
+      return "filePath must be an absolute Markdown file path";
+    }
+    if (path.extname(filePath).toLowerCase() !== ".md") {
+      return "filePath must point to a .md file";
+    }
+    try {
+      const stat = fs.statSync(filePath);
+      if (!stat.isFile()) return "filePath must point to a file";
+    } catch (err) {
+      return `filePath is not readable: ${err.message}`;
+    }
+    return null;
+  }
+
+  function validateBeautifyAccess(body) {
+    const { agent, agentId } = getBeautifyAgent(body?.agentId);
+    if (!agentId) return { error: "agent unavailable", status: 500 };
+    if (!isBeautifyPluginAvailable()) {
+      return { error: "beautify tool is unavailable", status: 404 };
+    }
+    if (!isBeautifyEnabled(agent)) {
+      return { error: "beautify tool is disabled for this agent", status: 403 };
+    }
+    return { agent, agentId };
+  }
+
   route.get("/desk/beautify/status", async (c) => {
     const { agent, agentId } = getBeautifyAgent(c.req.query("agentId"));
     const available = isBeautifyPluginAvailable();
@@ -313,30 +339,43 @@ export function createDeskRoute(engine, hub) {
     return c.json({ available, enabled, agentId });
   });
 
+  route.post("/desk/beautify/cover/apply", async (c) => {
+    const body = await safeJson(c);
+    const filePath = typeof body?.filePath === "string" ? body.filePath : "";
+    const fileError = validateBeautifyMarkdownFilePath(filePath);
+    if (fileError) return c.json({ error: fileError }, 400);
+
+    const access = validateBeautifyAccess(body);
+    if (access.error) return c.json({ error: access.error }, access.status);
+
+    const imageFilePath = typeof body?.imageFilePath === "string"
+      ? body.imageFilePath
+      : typeof body?.generatedFilePath === "string" ? body.generatedFilePath : "";
+    if (!imageFilePath || !path.isAbsolute(imageFilePath)) {
+      return c.json({ error: "imageFilePath must be an absolute image file path" }, 400);
+    }
+
+    try {
+      const result = await applyMarkdownCoverFromGeneratedFile({
+        markdownFilePath: filePath,
+        generatedFilePath: imageFilePath,
+      });
+      emitAppEvent(engine, "markdown-cover-updated", { filePath });
+      return c.json({ ok: true, cover: result.cover, beautifyCover: result });
+    } catch (err) {
+      return c.json({ error: err?.message || String(err) }, 400);
+    }
+  });
+
   route.post("/desk/beautify/cover", async (c) => {
     const body = await safeJson(c);
     const filePath = typeof body?.filePath === "string" ? body.filePath : "";
-    if (!filePath || !path.isAbsolute(filePath)) {
-      return c.json({ error: "filePath must be an absolute Markdown file path" }, 400);
-    }
-    if (path.extname(filePath).toLowerCase() !== ".md") {
-      return c.json({ error: "filePath must point to a .md file" }, 400);
-    }
-    try {
-      const stat = fs.statSync(filePath);
-      if (!stat.isFile()) return c.json({ error: "filePath must point to a file" }, 400);
-    } catch (err) {
-      return c.json({ error: `filePath is not readable: ${err.message}` }, 400);
-    }
+    const fileError = validateBeautifyMarkdownFilePath(filePath);
+    if (fileError) return c.json({ error: fileError }, 400);
 
-    const { agent, agentId } = getBeautifyAgent(body?.agentId);
-    if (!agentId) return c.json({ error: "agent unavailable" }, 500);
-    if (!isBeautifyPluginAvailable()) {
-      return c.json({ error: "beautify tool is unavailable" }, 404);
-    }
-    if (!isBeautifyEnabled(agent)) {
-      return c.json({ error: "beautify tool is disabled for this agent" }, 403);
-    }
+    const access = validateBeautifyAccess(body);
+    if (access.error) return c.json({ error: access.error }, access.status);
+    const { agent, agentId } = access;
 
     const activityId = `beautify-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const activityDir = path.join(engine.agentsDir, agentId, "activity");

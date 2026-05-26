@@ -4,13 +4,14 @@ import { isBeautifyEnabledForAgentConfig } from "../lib/availability.js";
 
 export const name = "create-cover";
 export const description =
-  "把一张已有图片应用为 Markdown Notion-like cover：复制到同级附件文件夹，并写入 cover frontmatter。";
+  "把一张已有图片应用为 Markdown Notion-like cover。若用户要求生成新封面，请先调用 beautify_get-cover-style-guide，再调用生图工具准备图片，最后用本工具写入 Markdown。";
 
 export const promptGuidelines = [
   "Use beautify_create-cover only after an image already exists on disk.",
   "The image may come from image-gen, a built-in cover asset, or a user-selected local image.",
   "This tool does not read the article to design prompts, does not call any language model, and does not generate images.",
-  "For a new Markdown cover, first read the target Markdown file, write the image prompt yourself, call image-gen_generate-image with ratio 3:2, then wait/check pending tasks until a generated SessionFile is available.",
+  "When the user asks to create/generate/replace/improve a Markdown cover from chat, first call beautify_get-cover-style-guide and read the target Markdown file before writing the image prompt.",
+  "For a new Markdown cover, write the image prompt yourself using the style guide, call image-gen_generate-image with ratio 3:2, then wait/check pending tasks until a generated SessionFile is available.",
   "After image generation resolves, pass the generated SessionFile filePath as generatedFilePath and the Markdown path as targetFilePath.",
   "If the target Markdown file path is not explicit and cannot be inferred from attached file metadata, ask the user to confirm the path before calling this tool.",
   "When called from an editor button, the file path is explicit; use it directly.",
@@ -47,6 +48,21 @@ function textResult(text, details = undefined) {
   };
 }
 
+function emitMarkdownCoverUpdated(ctx, filePath) {
+  try {
+    ctx?.bus?.emit?.({
+      type: "app_event",
+      event: {
+        type: "markdown-cover-updated",
+        payload: { filePath },
+        source: "server",
+      },
+    }, null);
+  } catch (err) {
+    ctx?.log?.warn?.(`markdown cover refresh event failed: ${err?.message || err}`);
+  }
+}
+
 export async function execute(input, ctx) {
   const targetFilePath = resolveTargetFilePath(input);
   if (!targetFilePath || !path.isAbsolute(targetFilePath)) {
@@ -68,6 +84,7 @@ export async function execute(input, ctx) {
       pixelWidth: input.pixelWidth,
       pixelHeight: input.pixelHeight,
     });
+    emitMarkdownCoverUpdated(ctx, targetFilePath);
     return textResult("已把图片应用为 Markdown cover，并写入 frontmatter。", {
       beautifyCover: result,
     });

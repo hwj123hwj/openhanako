@@ -72,6 +72,59 @@ function coverBlockRange(lines: string[]): { start: number; end: number } | null
   return { start, end };
 }
 
+function frontMatterLines(frontMatter: string): string[] {
+  return frontMatter.trim() ? frontMatter.split(/\r?\n/) : [];
+}
+
+function frontMatterLineRanges(frontMatter: string, baseOffset: number): Array<{ text: string; from: number; to: number }> {
+  const ranges: Array<{ text: string; from: number; to: number }> = [];
+  const re = /(.*?)(\r?\n|$)/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(frontMatter))) {
+    if (match[0] === '') break;
+    ranges.push({
+      text: match[1],
+      from: baseOffset + match.index,
+      to: baseOffset + match.index + match[0].length,
+    });
+  }
+  return ranges;
+}
+
+function extractCoverBlockLines(markdown: string): string[] | null {
+  const parts = splitFrontMatter(markdown);
+  if (!parts.hasFrontMatter) return null;
+  const lines = frontMatterLines(parts.frontMatter);
+  const range = coverBlockRange(lines);
+  if (!range) return null;
+  return lines.slice(range.start, range.end);
+}
+
+export function findMarkdownCoverRenderRange(markdown: string): { from: number; to: number } | null {
+  if (!parseMarkdownCover(markdown)) return null;
+  const match = markdown.match(FRONT_MATTER_RE);
+  if (!match) return null;
+
+  const openingLength = 3 + match[1].length;
+  const frontMatter = match[2] || '';
+  const lines = frontMatterLines(frontMatter);
+  const range = coverBlockRange(lines);
+  if (!range) return null;
+
+  const hasOtherFrontMatter = lines.some((line, index) => (
+    (index < range.start || index >= range.end) && !!line.trim()
+  ));
+  if (!hasOtherFrontMatter) {
+    return { from: 0, to: match[0].length };
+  }
+
+  const lineRanges = frontMatterLineRanges(frontMatter, openingLength);
+  const first = lineRanges[range.start];
+  const last = lineRanges[range.end - 1];
+  if (!first || !last) return null;
+  return { from: first.from, to: last.to };
+}
+
 export function parseMarkdownCover(markdown: string): MarkdownCover | null {
   const parts = splitFrontMatter(markdown);
   if (!parts.hasFrontMatter) return null;
@@ -162,10 +215,39 @@ export function updateMarkdownCoverLayout(markdown: string, patch: MarkdownCover
   return `---${parts.newline}${nextLines.join(parts.newline)}${parts.newline}---${parts.newline}${parts.body}`;
 }
 
+export function isMarkdownCoverOnlyUpdate(previousMarkdown: string, nextMarkdown: string): boolean {
+  const nextCover = parseMarkdownCover(nextMarkdown);
+  if (!nextCover) return false;
+  return stripMarkdownFrontMatterForPreview(previousMarkdown) === stripMarkdownFrontMatterForPreview(nextMarkdown);
+}
+
+export function mergeMarkdownCoverIntoDocument(targetMarkdown: string, sourceMarkdown: string): string | null {
+  const coverLines = extractCoverBlockLines(sourceMarkdown);
+  if (!coverLines) return null;
+
+  const targetParts = splitFrontMatter(targetMarkdown);
+  if (!targetParts.hasFrontMatter) {
+    return `---${targetParts.newline}${coverLines.join(targetParts.newline)}${targetParts.newline}---${targetParts.newline}${targetParts.body}`;
+  }
+
+  const lines = frontMatterLines(targetParts.frontMatter);
+  const existingRange = coverBlockRange(lines);
+  const nextLines = [...lines];
+  if (existingRange) {
+    nextLines.splice(existingRange.start, existingRange.end - existingRange.start, ...coverLines);
+  } else {
+    nextLines.push(...coverLines);
+  }
+  return `---${targetParts.newline}${nextLines.join(targetParts.newline)}${targetParts.newline}---${targetParts.newline}${targetParts.body}`;
+}
+
 function normalizePathSegments(pathname: string): string {
-  const prefix = pathname.startsWith('/') ? '/' : '';
+  const normalized = pathname.replace(/\\/g, '/');
+  const prefixMatch = normalized.match(/^(?:[A-Za-z]:|\/\/[^/]+\/[^/]+|\/)?/);
+  const prefix = prefixMatch?.[0] || '';
+  const rest = normalized.slice(prefix.length);
   const parts: string[] = [];
-  for (const part of pathname.replace(/\\/g, '/').split('/')) {
+  for (const part of rest.split('/')) {
     if (!part || part === '.') continue;
     if (part === '..') {
       if (parts.length > 0) parts.pop();
@@ -173,7 +255,9 @@ function normalizePathSegments(pathname: string): string {
     }
     parts.push(part);
   }
-  return `${prefix}${parts.join('/')}`;
+  if (!prefix) return parts.join('/');
+  if (prefix.endsWith('/')) return `${prefix}${parts.join('/')}`;
+  return parts.length ? `${prefix}/${parts.join('/')}` : prefix;
 }
 
 function dirnamePortable(filePath: string): string | null {

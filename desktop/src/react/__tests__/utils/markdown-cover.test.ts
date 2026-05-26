@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  findMarkdownCoverRenderRange,
+  isMarkdownCoverOnlyUpdate,
+  mergeMarkdownCoverIntoDocument,
   parseMarkdownCover,
+  resolveMarkdownCoverImagePath,
   stripMarkdownFrontMatterForPreview,
   updateMarkdownCoverLayout,
 } from '../../utils/markdown-cover';
@@ -75,5 +79,77 @@ describe('markdown cover utilities', () => {
     expect(next).toContain('positionY: 64');
     expect(next).toContain('displayWidth: 100');
     expect(next).toMatch(/\n---\n# Demo$/);
+  });
+
+  it('merges a cover-only external update into a dirty markdown document body', () => {
+    const saved = [
+      '---',
+      'title: Demo',
+      '---',
+      '# Demo',
+      '',
+      'Body',
+    ].join('\n');
+    const coverUpdated = [
+      '---',
+      'title: Demo',
+      'cover:',
+      '  image: 文本附件/cover.png',
+      '  displayHeight: 320',
+      '---',
+      '# Demo',
+      '',
+      'Body',
+    ].join('\n');
+    const dirty = [
+      '---',
+      'title: Demo',
+      '---',
+      '# Demo',
+      '',
+      'Body with local draft',
+    ].join('\n');
+
+    expect(isMarkdownCoverOnlyUpdate(saved, coverUpdated)).toBe(true);
+    expect(mergeMarkdownCoverIntoDocument(dirty, coverUpdated)).toBe([
+      '---',
+      'title: Demo',
+      'cover:',
+      '  image: 文本附件/cover.png',
+      '  displayHeight: 320',
+      '---',
+      '# Demo',
+      '',
+      'Body with local draft',
+    ].join('\n'));
+  });
+
+  it('renders only the cover block when other frontmatter fields exist', () => {
+    const markdown = [
+      '---',
+      'title: Demo',
+      'cover:',
+      '  image: 文本附件/cover.png',
+      'tags:',
+      '  - writing',
+      '---',
+      '# Demo',
+    ].join('\n');
+    const range = findMarkdownCoverRenderRange(markdown);
+
+    expect(range && markdown.slice(range.from, range.to)).toBe([
+      'cover:',
+      '  image: 文本附件/cover.png',
+      '',
+    ].join('\n'));
+  });
+
+  it('preserves Windows drive and UNC prefixes when resolving cover image paths', () => {
+    expect(resolveMarkdownCoverImagePath('C:\\vault\\notes\\day.md', '文本附件\\cover.png'))
+      .toBe('C:/vault/notes/文本附件/cover.png');
+    expect(resolveMarkdownCoverImagePath('\\\\server\\share\\notes\\day.md', '文本附件\\cover.png'))
+      .toBe('//server/share/notes/文本附件/cover.png');
+    expect(resolveMarkdownCoverImagePath('/vault/notes/day.md', '../covers/cover.png'))
+      .toBe('/vault/covers/cover.png');
   });
 });
