@@ -256,6 +256,8 @@ describe("HTTP route security policy", () => {
 
     expect(classifyHttpRoute({ method: "GET", path: "/preview/html/pv_123" }))
       .toMatchObject({ kind: "public" });
+    expect(classifyHttpRoute({ method: "GET", path: "/preview/html/pv_123/assets/preview_only/images/pic.png" }))
+      .toMatchObject({ kind: "public" });
     expect(authorizeHttpRoute({
       method: "GET",
       path: "/preview/html/pv_123?previewToken=preview_only",

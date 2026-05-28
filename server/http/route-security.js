@@ -200,7 +200,7 @@ function isWebAuthBootstrapRoute(verb, routePath) {
 
 function isHtmlPreviewDocumentRoute(verb, routePath) {
   if (verb !== "GET" && verb !== "HEAD") return false;
-  return /^\/preview\/html\/[^/]+$/.test(routePath);
+  return /^\/preview\/html\/[^/]+(?:\/assets\/[^/]+\/.+)?$/.test(routePath);
 }
 
 function isSettingsReadRoute(verb, routePath) {

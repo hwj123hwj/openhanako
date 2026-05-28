@@ -1923,6 +1923,38 @@ function _bindBrowserViewLifecycle(view, sessionPath) {
   if (sessionPath && _isBrowserViewDestroyed(view)) forget("destroyed");
 }
 
+function _createBrowserWebContentsView(sessionPath) {
+  const ses = session.fromPartition("persist:hana-browser");
+  const view = new WebContentsView({
+    webPreferences: {
+      session: ses,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  view.webContents.setAudioMuted(true);
+  view.webContents.on("did-navigate", (_e, url) => {
+    if (view === _browserWebView) _notifyViewerUrl(url);
+  });
+  view.webContents.on("did-navigate-in-page", (_e, url) => {
+    if (view === _browserWebView) _notifyViewerUrl(url);
+  });
+  view.webContents.setWindowOpenHandler(({ url }) => {
+    if (isAllowedBrowserUrl(url)) {
+      view.webContents.loadURL(url);
+    }
+    return { action: "deny" };
+  });
+  view.webContents.on("page-title-updated", () => {
+    if (view === _browserWebView) _notifyViewerUrl(view.webContents.getURL());
+  });
+  view.setBorderRadius(10);
+  _bindBrowserViewLifecycle(view, sessionPath);
+  return view;
+}
+
 function _ensureLiveWebContents(view, sessionPath) {
   if (_isBrowserViewDestroyed(view)) {
     _forgetBrowserView(view, "destroyed");
@@ -2094,43 +2126,7 @@ async function handleBrowserCommand(cmd, params) {
       // 无 sessionPath 且已有活跃 view → 直接返回（兼容旧调用）
       if (!sp && _browserWebView && !_isBrowserViewDestroyed(_browserWebView)) return {};
 
-      const ses = session.fromPartition("persist:hana-browser");
-      const view = new WebContentsView({
-        webPreferences: {
-          session: ses,
-          contextIsolation: true,
-          nodeIntegration: false,
-          sandbox: true,
-        },
-      });
-
-      // 默认静音
-      view.webContents.setAudioMuted(true);
-
-      // 监听导航事件，实时更新 URL 栏（只在该 view 是活跃 view 时通知）
-      view.webContents.on("did-navigate", (_e, url) => {
-        if (view === _browserWebView) _notifyViewerUrl(url);
-      });
-      view.webContents.on("did-navigate-in-page", (_e, url) => {
-        if (view === _browserWebView) _notifyViewerUrl(url);
-      });
-
-      // 在新窗口中打开链接（target=_blank）时，在当前视图中打开
-      view.webContents.setWindowOpenHandler(({ url }) => {
-        if (isAllowedBrowserUrl(url)) {
-          view.webContents.loadURL(url);
-        }
-        return { action: "deny" };
-      });
-
-      // 页面标题变化时更新标题栏（只在该 view 是活跃 view 时通知）
-      view.webContents.on("page-title-updated", () => {
-        if (view === _browserWebView) _notifyViewerUrl(view.webContents.getURL());
-      });
-
-      // 卡片圆角
-      view.setBorderRadius(10);
-      _bindBrowserViewLifecycle(view, sp);
+      const view = _createBrowserWebContentsView(sp);
 
       // 存入 Map
       if (sp) _browserViews.set(sp, view);
@@ -2901,9 +2897,32 @@ wrapIpcHandler("set-auto-launch-enabled", (_event, enabled) => setAutoLaunchEnab
 wrapIpcBestEffortHandler("open-settings", (_event, tab, theme) => createSettingsWindow(tab, theme));
 
 // 浏览器查看器窗口
-wrapIpcBestEffortHandler("open-browser-viewer", (_event, theme) => {
+wrapIpcBestEffortHandler("open-browser-viewer", async (_event, theme, url) => {
   if (theme) _browserViewerTheme = theme;
   createBrowserViewerWindow();
+  if (!url || !isAllowedBrowserUrl(url)) return;
+
+  if (_browserWebView && _currentBrowserSession) {
+    if (browserViewerWindow && !browserViewerWindow.isDestroyed()) {
+      try { browserViewerWindow.contentView.removeChildView(_browserWebView); } catch {}
+    }
+    _browserWebView = null;
+    _currentBrowserSession = null;
+  }
+
+  if (!_browserWebView) {
+    _browserWebView = _createBrowserWebContentsView(null);
+    if (browserViewerWindow && !browserViewerWindow.isDestroyed()) {
+      try { browserViewerWindow.contentView.removeChildView(_browserWebView); } catch {}
+      browserViewerWindow.contentView.addChildView(_browserWebView);
+      _updateBrowserViewBounds();
+    }
+  }
+
+  await _withLiveWebContents(null, async (wc) => {
+    await wc.loadURL(url);
+  });
+  _notifyViewerUrl(url);
 });
 wrapIpcBestEffortHandler("browser-go-back", () => { if (_browserWebView) _browserWebView.webContents.goBack(); });
 wrapIpcBestEffortHandler("browser-go-forward", () => { if (_browserWebView) _browserWebView.webContents.goForward(); });
