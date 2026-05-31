@@ -87,4 +87,23 @@ describe("session permission modes", () => {
     expect(classifySessionPermission({ mode: "operate", toolName: "computer", context: { isSubagent: true } }))
       .toEqual({ action: "allow" });
   });
+
+  it("subagent 没有 ask 模式：ask 在 subagent 上下文坍缩为 operate（永不挂在确认上）", () => {
+    // subagent 上下文 + ask：write 不 prompt，直接放行（坍缩 operate）
+    expect(classifySessionPermission({ mode: "ask", toolName: "write", context: { isSubagent: true } }))
+      .toEqual({ action: "allow" });
+    expect(classifySessionPermission({ mode: "ask", toolName: "bash", context: { isSubagent: true } }))
+      .toEqual({ action: "allow" });
+    // browser/terminal 的写动作同理（ask 坍缩 operate → 放行，不 prompt）
+    expect(classifySessionPermission({ mode: "ask", toolName: "browser", params: { action: "click" }, context: { isSubagent: true } }))
+      .toEqual({ action: "allow" });
+    expect(classifySessionPermission({ mode: "ask", toolName: "terminal", params: { action: "start" }, context: { isSubagent: true } }))
+      .toEqual({ action: "allow" });
+    // 非 subagent 上下文：ask 照常 prompt（不受影响）
+    expect(classifySessionPermission({ mode: "ask", toolName: "write" }))
+      .toMatchObject({ action: "prompt" });
+    // subagent + ask 仍挡越权工具（坍缩只影响 ask→operate，不放开禁用集）
+    expect(classifySessionPermission({ mode: "ask", toolName: "pin_memory", context: { isSubagent: true } }))
+      .toMatchObject({ action: "deny", code: "ACTION_BLOCKED_IN_SUBAGENT" });
+  });
 });

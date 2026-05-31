@@ -129,12 +129,19 @@ function classifyTerminalAction(mode, action) {
 }
 
 export function classifySessionPermission({ mode, toolName, params, context } = {}) {
-  const normalized = normalizeSessionPermissionMode(mode);
+  let normalized = normalizeSessionPermissionMode(mode);
   const name = typeof toolName === "string" ? toolName : "";
   if (!name) return { action: "allow" };
-  // subagent 上下文固定边界（与 mode 无关，优先于其它判定）：防自递归。
+  // subagent 上下文固定边界（与 mode 无关，优先于其它判定）：防自递归 + 禁越权工具。
   if (context?.isSubagent && SUBAGENT_BLOCKED_TOOLS.has(name)) {
     return blocked(name, { code: "ACTION_BLOCKED_IN_SUBAGENT", message: `${name} is not available inside a subagent.` });
+  }
+  // 硬不变量：subagent 没有「先问(ask)」模式。后台任务无人交互确认，若走 prompt 会挂在
+  // 永不到来的确认上（直到超时）。ASK 在 subagent 上下文一律坍缩为 operate，与
+  // subagent-tool-policy 的继承映射一致。收口已保证 subagent 不会拿到 ask，这里是兜底硬约束：
+  // 即便上游绕过收口直接给了 ask，也绝不让 subagent 挂在确认上。
+  if (context?.isSubagent && normalized === SESSION_PERMISSION_MODES.ASK) {
+    normalized = SESSION_PERMISSION_MODES.OPERATE;
   }
   if (INFORMATION_TOOLS.has(name)) return { action: "allow" };
   if (name === "browser") return classifyBrowserAction(normalized, params?.action);
