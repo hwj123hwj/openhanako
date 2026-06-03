@@ -23,6 +23,12 @@ import { bumpMessageLiveVersion } from '../stores/message-live-version';
 /* eslint-disable @typescript-eslint/no-explicit-any -- 流式消息 handle(msg) 接收动态 JSON */
 
 const FLUSH_INTERVAL = 200;
+let streamMessageSeq = 0;
+
+function nextStreamMessageId(): string {
+  streamMessageSeq = (streamMessageSeq + 1) % Number.MAX_SAFE_INTEGER;
+  return `stream-${Date.now()}-${streamMessageSeq}`;
+}
 
 interface Buffer {
   sessionPath: string;
@@ -135,7 +141,7 @@ class StreamBufferManager {
       : null;
     if (existing) return;
 
-    const id = existingId || `stream-${Date.now()}`;
+    const id = existingId || nextStreamMessageId();
     const msg: ChatMessage = { id, role: 'assistant', blocks: [], timestamp: Date.now() };
     store.appendItem(buf.sessionPath, { type: 'message', data: msg });
     bumpMessageLiveVersion(buf.sessionPath);
@@ -377,7 +383,7 @@ class StreamBufferManager {
 
         if (isInterludeBlock(block) && block.taskId) {
           if (this.hasTurnState(buf)) this.flush(buf);
-          const consumed = useStore.getState().insertBlockNearTaskId(buf.sessionPath, block.taskId, block);
+          const consumed = useStore.getState().insertInterludeNearTaskResult(buf.sessionPath, block.taskId, block);
           if (consumed) {
             bumpMessageLiveVersion(buf.sessionPath);
             break;
@@ -473,11 +479,10 @@ export const streamBufferManager = new StreamBufferManager();
 function mergeContentBlock(blocks: ContentBlock[], block: ContentBlock): ContentBlock[] {
   if (isInterludeBlock(block) && block.taskId) {
     if (hasEquivalentInterludeBlock(blocks, block)) return blocks;
-    const idx = blocks.findIndex((existing) => isTaskAnchorBlock(existing, block.taskId!));
+    const idx = blocks.findIndex((existing) => isInterludeResultAnchorBlock(existing, block.taskId!));
     if (idx < 0) return [...blocks, block];
     const next = [...blocks];
-    const insertAt = isMediaTaskAnchorBlock(blocks[idx], block.taskId) ? idx : idx + 1;
-    next.splice(insertAt, 0, block);
+    next.splice(idx, 0, block);
     return next;
   }
   if (block.type === 'media_generation' && block.status === 'pending') {
@@ -531,9 +536,8 @@ function isMediaTaskAnchorBlock(block: ContentBlock, taskId: string): boolean {
   );
 }
 
-function isTaskAnchorBlock(block: ContentBlock, taskId: string): boolean {
-  if (isMediaTaskAnchorBlock(block, taskId)) return true;
-  return (block.type === 'subagent' || block.type === 'workflow') && block.taskId === taskId;
+function isInterludeResultAnchorBlock(block: ContentBlock, taskId: string): boolean {
+  return isMediaTaskAnchorBlock(block, taskId);
 }
 
 // 让 chat-slice / session-actions 通过桥接模块触达 manager，打破循环依赖。

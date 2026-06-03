@@ -28,7 +28,7 @@ export interface ChatSlice {
   updateLastMessage: (path: string, updater: (msg: ChatMessage) => ChatMessage) => void;
   updateMessageById: (path: string, messageId: string, updater: (msg: ChatMessage) => ChatMessage) => boolean;
   truncateSessionFromMessage: (path: string, messageId: string) => boolean;
-  insertBlockNearTaskId: (sessionPath: string, taskId: string, block: ContentBlock) => boolean;
+  insertInterludeNearTaskResult: (sessionPath: string, taskId: string, block: Extract<ContentBlock, { type: 'interlude' }>) => boolean;
   resolveBlockByTaskId: (sessionPath: string, taskId: string, resolution: ContentBlock) => boolean;
   patchBlockByTaskId: (sessionPath: string, taskId: string, patch: Record<string, any>) => void;
   _pendingBlockPatches: Record<string, Record<string, any>>;
@@ -197,7 +197,7 @@ export const createChatSlice = (
   // 缓存：block_update 到达时 block 可能还没添加到 store（时序竞争）
   _pendingBlockPatches: {} as Record<string, Record<string, any>>,
 
-  insertBlockNearTaskId: (sessionPath, taskId, block) => {
+  insertInterludeNearTaskResult: (sessionPath, taskId, block) => {
     if (!get().chatSessions[sessionPath]) return false;
 
     let consumed = false;
@@ -216,12 +216,11 @@ export const createChatSlice = (
           return {};
         }
 
-        const blockIdx = blocks.findIndex((existing) => isTaskAnchorBlock(existing, taskId));
+        const blockIdx = blocks.findIndex((existing) => isInterludeResultAnchorBlock(existing, taskId));
         if (blockIdx < 0) continue;
 
         const nextBlocks = [...blocks];
-        const insertAt = isMediaTaskAnchorBlock(blocks[blockIdx], taskId) ? blockIdx : blockIdx + 1;
-        nextBlocks.splice(insertAt, 0, block);
+        nextBlocks.splice(blockIdx, 0, block);
         items[i] = { ...item, data: { ...item.data, blocks: nextBlocks } };
         consumed = true;
         invalidateSessionCache(sessionPath);
@@ -454,7 +453,6 @@ function isMediaTaskAnchorBlock(block: ContentBlock, taskId: string): boolean {
   );
 }
 
-function isTaskAnchorBlock(block: ContentBlock, taskId: string): boolean {
-  if (isMediaTaskAnchorBlock(block, taskId)) return true;
-  return (block.type === 'subagent' || block.type === 'workflow') && block.taskId === taskId;
+function isInterludeResultAnchorBlock(block: ContentBlock, taskId: string): boolean {
+  return isMediaTaskAnchorBlock(block, taskId);
 }

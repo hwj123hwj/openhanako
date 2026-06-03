@@ -495,7 +495,7 @@
 
 .interludeRow {
     width: 100%;
-    margin: var(--space-sm) 0;
+    margin: var(--space-lg) 0;
     display: flex;
     justify-content: center;
     font-family: var(--font-sans);

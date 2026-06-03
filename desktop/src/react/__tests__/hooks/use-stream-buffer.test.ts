@@ -324,4 +324,51 @@ describe('streamBufferManager.ensureMessage 自愈', () => {
       text: '小花拿到了来自 图片生成 工具的结果',
     });
   });
+
+  it('workflow 幕间回复在实时流里按时间成为独立消息，不回插到原 workflow 卡下面', () => {
+    streamBufferManager.handle({
+      type: 'content_block',
+      sessionPath: PATH,
+      block: {
+        type: 'workflow',
+        taskId: 'workflow-1',
+        taskTitle: 'ten-writers',
+        streamStatus: 'running',
+        startedAt: 1000,
+      },
+    });
+    streamBufferManager.handle({ type: 'turn_end', sessionPath: PATH });
+
+    streamBufferManager.handle({
+      type: 'content_block',
+      sessionPath: PATH,
+      block: {
+        type: 'interlude',
+        id: 'deferred:workflow-1:success',
+        variant: 'deferred_result',
+        taskId: 'workflow-1',
+        status: 'success',
+        sourceKind: 'workflow',
+        sourceLabel: 'ten-writers',
+        text: 'Hanako收到了来自 ten-writers workflow 的回复',
+        detailMarkdown: 'workflow result',
+      },
+    });
+
+    const assistantItems = getItems().filter((item) => item.type === 'message' && item.data.role === 'assistant');
+    expect(assistantItems).toHaveLength(2);
+    const [workflowMessage, interludeMessage] = assistantItems;
+    expect(workflowMessage?.type).toBe('message');
+    expect(interludeMessage?.type).toBe('message');
+    if (workflowMessage?.type !== 'message' || interludeMessage?.type !== 'message') {
+      throw new Error('expected assistant messages');
+    }
+    expect(workflowMessage.data.blocks?.map((block) => block.type)).toEqual(['workflow']);
+    expect(interludeMessage.data.blocks?.map((block) => block.type)).toEqual(['interlude']);
+    expect(interludeMessage.data.blocks?.[0]).toMatchObject({
+      type: 'interlude',
+      taskId: 'workflow-1',
+      sourceKind: 'workflow',
+    });
+  });
 });
