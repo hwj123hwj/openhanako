@@ -816,6 +816,8 @@ function InputAreaInner({ surface }: Required<InputAreaProps>) {
             name: file.name,
             isDir: false,
             mimeType,
+            presentation: 'voice-input',
+            listed: false,
           }],
         },
         audios: [{
@@ -882,6 +884,7 @@ function InputAreaInner({ surface }: Required<InputAreaProps>) {
           base64Data,
           mimeType: 'audio/wav',
           sessionPath,
+          presentation: 'voice-input',
         }),
       });
       const data = await res.json();

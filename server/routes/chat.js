@@ -95,6 +95,8 @@ function sessionFileToContentBlock(file, extra = undefined) {
     ...(file.mime ? { mime: file.mime } : {}),
     ...(file.kind ? { kind: file.kind } : {}),
     ...(file.storageKind ? { storageKind: file.storageKind } : {}),
+    ...(file.presentation ? { presentation: file.presentation } : {}),
+    ...(file.listed !== undefined ? { listed: file.listed !== false } : {}),
     ...(file.status ? { status: file.status } : {}),
     ...(file.missingAt !== undefined ? { missingAt: file.missingAt } : {}),
     ...(file.mtimeMs !== undefined ? { mtimeMs: file.mtimeMs } : {}),

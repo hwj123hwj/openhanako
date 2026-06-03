@@ -1560,6 +1560,8 @@ function sessionFileLifecycleFields(file, engine) {
     ...(source.mime ? { mime: source.mime } : {}),
     ...(source.kind ? { kind: source.kind } : {}),
     ...(source.storageKind ? { storageKind: source.storageKind } : {}),
+    ...(source.presentation ? { presentation: source.presentation } : {}),
+    ...(source.listed !== undefined ? { listed: source.listed !== false } : {}),
     ...(source.status ? { status: source.status } : {}),
     ...(source.missingAt !== undefined ? { missingAt: source.missingAt } : {}),
     ...(source.mtimeMs !== undefined ? { mtimeMs: source.mtimeMs } : {}),

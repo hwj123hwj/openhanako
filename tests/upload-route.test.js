@@ -203,6 +203,8 @@ describe("upload route", () => {
       label: "shot.png",
       origin: "user_upload",
       storageKind: "managed_cache",
+      presentation: "attachment",
+      listed: true,
     });
     expect(data.uploads[0]).toMatchObject({
       fileId: "sf_blob",
@@ -216,7 +218,7 @@ describe("upload route", () => {
     const hanakoHome = path.join(tmpDir, "hana-home");
     const sessionPath = "/sessions/audio-blob.jsonl";
     const audioBytes = Buffer.from("webm audio bytes");
-    const registerSessionFile = vi.fn(({ sessionPath, filePath, label, origin, storageKind }) => ({
+    const registerSessionFile = vi.fn(({ sessionPath, filePath, label, origin, storageKind, presentation, listed }) => ({
       id: "sf_audio",
       sessionPath,
       filePath,
@@ -230,6 +232,8 @@ describe("upload route", () => {
       kind: "audio",
       origin,
       storageKind,
+      presentation,
+      listed,
       createdAt: 1,
     }));
     const app = new Hono();
@@ -243,6 +247,7 @@ describe("upload route", () => {
         name: "recording.webm",
         base64Data: audioBytes.toString("base64"),
         mimeType: "audio/webm",
+        presentation: "voice-input",
       }),
     });
     const data = await res.json();
@@ -256,8 +261,10 @@ describe("upload route", () => {
       sessionPath,
       filePath: data.uploads[0].dest,
       label: "recording.weba",
-      origin: "user_upload",
+      origin: "voice_input",
       storageKind: "managed_cache",
+      presentation: "voice-input",
+      listed: false,
     });
     expect(data.uploads[0]).toMatchObject({
       fileId: "sf_audio",
@@ -265,6 +272,8 @@ describe("upload route", () => {
       mime: "audio/webm",
       kind: "audio",
       storageKind: "managed_cache",
+      presentation: "voice-input",
+      listed: false,
     });
   });
 
@@ -303,6 +312,30 @@ describe("upload route", () => {
     const data = await res.json();
     expect(data.uploads[0]).toMatchObject({ error: "unsupported mimeType" });
     expect(data.uploads[0].dest).toBeUndefined();
+  });
+
+  it("upload-blob only accepts voice-input presentation for audio blobs", async () => {
+    tmpDir = mktemp();
+    const app = new Hono();
+    app.route("/api", createUploadRoute({ hanakoHome: path.join(tmpDir, "hana-home") }));
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+      "base64",
+    );
+
+    const res = await app.request("/api/upload-blob", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "shot.png",
+        base64Data: png.toString("base64"),
+        mimeType: "image/png",
+        presentation: "voice-input",
+      }),
+    });
+    const data = await res.json();
+
+    expect(data.uploads[0].error).toBe("voice-input requires audio mimeType");
   });
 
   it("upload-blob forces extension to match mimeType (defends against name spoofing)", async () => {

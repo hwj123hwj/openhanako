@@ -276,6 +276,7 @@ const UserAttachmentsView = memo(function UserAttachmentsView({ attachments, des
                 base64Data: att.base64Data,
                 mimeType: att.mimeType,
               }}
+              showName={att.presentation !== 'voice-input'}
             />
           );
         }

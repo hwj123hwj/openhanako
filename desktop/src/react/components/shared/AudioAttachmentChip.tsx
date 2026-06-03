@@ -11,6 +11,7 @@ export interface AudioAttachmentFile {
 interface AudioAttachmentChipProps {
   file: AudioAttachmentFile;
   showAt?: boolean;
+  showName?: boolean;
   onRemove?: () => void;
   className?: string;
 }
@@ -18,6 +19,7 @@ interface AudioAttachmentChipProps {
 export const AudioAttachmentChip = memo(function AudioAttachmentChip({
   file,
   showAt = false,
+  showName = true,
   onRemove,
   className,
 }: AudioAttachmentChipProps) {
@@ -92,7 +94,7 @@ export const AudioAttachmentChip = memo(function AudioAttachmentChip({
         <span />
         <span />
       </span>
-      <span className={styles.name}>{file.name}</span>
+      {showName && <span className={styles.name}>{file.name}</span>}
       {onRemove && (
         <button
           type="button"

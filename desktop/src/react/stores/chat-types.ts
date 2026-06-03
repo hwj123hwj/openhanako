@@ -28,6 +28,8 @@ export interface UserAttachment {
   isDir: boolean;
   base64Data?: string;
   mimeType?: string;
+  presentation?: 'attachment' | 'voice-input' | string;
+  listed?: boolean;
   status?: 'available' | 'expired' | string;
   missingAt?: number | null;
   visionAuxiliary?: boolean;
@@ -51,6 +53,8 @@ export interface SessionRegistryFile {
   mime?: string;
   kind?: string;
   storageKind?: string;
+  presentation?: 'attachment' | 'voice-input' | string;
+  listed?: boolean;
   status?: 'available' | 'expired' | string;
   missingAt?: number | null;
   origin?: string;
@@ -151,10 +155,10 @@ export type TextDecorator =
 
 // 物种 B：富内容块（通过 content_block 事件 push，不 upsert）
 export type RichBlock =
-  | { type: 'file'; fileId?: string; filePath: string; label: string; ext: string; mime?: string; kind?: string; storageKind?: string; status?: 'available' | 'expired' | string; missingAt?: number | null; resource?: ResourceEnvelope; mtimeMs?: number; size?: number | null; version?: FileVersion | null; replacesTaskId?: string }
+  | { type: 'file'; fileId?: string; filePath: string; label: string; ext: string; mime?: string; kind?: string; storageKind?: string; presentation?: 'attachment' | 'voice-input' | string; listed?: boolean; status?: 'available' | 'expired' | string; missingAt?: number | null; resource?: ResourceEnvelope; mtimeMs?: number; size?: number | null; version?: FileVersion | null; replacesTaskId?: string }
   | { type: 'media_generation'; taskId: string; kind: 'image' | 'video' | string; status: 'pending' | 'failed' | 'aborted' | string; prompt?: string; batchId?: string; reason?: string }
   // COMPAT(create_artifact, remove no earlier than v0.133 after legacy sessions are migrated)
-  | { type: 'artifact'; artifactId: string; artifactType: string; title: string; content: string; language?: string | null; fileId?: string; filePath?: string; label?: string; ext?: string; mime?: string; kind?: string; storageKind?: string; status?: 'available' | 'expired' | string; missingAt?: number | null; resource?: ResourceEnvelope; mtimeMs?: number; size?: number | null; version?: FileVersion | null }
+  | { type: 'artifact'; artifactId: string; artifactType: string; title: string; content: string; language?: string | null; fileId?: string; filePath?: string; label?: string; ext?: string; mime?: string; kind?: string; storageKind?: string; presentation?: 'attachment' | 'voice-input' | string; listed?: boolean; status?: 'available' | 'expired' | string; missingAt?: number | null; resource?: ResourceEnvelope; mtimeMs?: number; size?: number | null; version?: FileVersion | null }
   | { type: 'screenshot'; base64: string; mimeType: string }
   | { type: 'skill'; skillName: string; skillFilePath: string; fileId?: string; installedFile?: Record<string, unknown>; installedSkillSource?: Record<string, unknown> }
   | { type: 'cron_confirm'; confirmId?: string; jobData: Record<string, unknown>; status: 'pending' | 'approved' | 'rejected' }

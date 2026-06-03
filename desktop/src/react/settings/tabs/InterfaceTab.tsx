@@ -40,6 +40,9 @@ const THEME_MODE_KEYS: Record<string, string> = Object.fromEntries([
   [registry.AUTO_OPTION.id, registry.AUTO_OPTION.i18nMode],
 ]);
 
+const VOICE_RECORD_SHORTCUT_MAC = ['⌘', '⇧', 'M'];
+const VOICE_RECORD_SHORTCUT_DEFAULT = ['Ctrl', 'Shift', 'M'];
+
 type MarkdownTypographyKey = Exclude<keyof EditorMarkdownTypography, 'fontPreset'>;
 
 interface AppearancePrefs {
@@ -76,6 +79,7 @@ const EDITOR_FONT_SIZE_ROWS: Array<{
 
 export function InterfaceTab() {
   const settingsConfig = useSettingsStore(s => s.settingsConfig);
+  const platformName = useSettingsStore(s => s.platformName);
   const [appearancePrefs, setAppearancePrefs] = useState<AppearancePrefs>(() => readAppearancePrefs());
   const refreshAppearancePrefs = useCallback(() => {
     setAppearancePrefs(readAppearancePrefs());
@@ -105,6 +109,9 @@ export function InterfaceTab() {
     })),
   ];
   const hardwareAccelerationEnabled = settingsConfig?.hardware_acceleration !== false;
+  const voiceShortcutKeys = platformName === 'darwin'
+    ? VOICE_RECORD_SHORTCUT_MAC
+    : VOICE_RECORD_SHORTCUT_DEFAULT;
 
   const saveEditorTypography = async (patch: Partial<EditorMarkdownTypography>) => {
     const previousConfig = useSettingsStore.getState().settingsConfig || {};
@@ -367,6 +374,23 @@ export function InterfaceTab() {
               value={currentTz}
               onChange={(val) => autoSaveConfig({ timezone: val })}
             />
+          }
+        />
+      </SettingsSection>
+
+      <SettingsSection title={t('settings.interface.shortcuts')}>
+        <SettingsRow
+          label={t('settings.interface.voiceRecordingShortcut')}
+          hint={t('settings.interface.voiceRecordingShortcutHint')}
+          control={
+            <div
+              className={styles['shortcut-keycaps']}
+              aria-label={voiceShortcutKeys.join(' + ')}
+            >
+              {voiceShortcutKeys.map(key => (
+                <kbd key={key} className={styles['shortcut-keycap']}>{key}</kbd>
+              ))}
+            </div>
           }
         />
       </SettingsSection>

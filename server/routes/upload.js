@@ -62,6 +62,7 @@ const WINDOWS_RESERVED_DEVICE_NAMES = new Set([
   "lpt8",
   "lpt9",
 ]);
+const SESSION_FILE_PRESENTATIONS = new Set(["attachment", "voice-input"]);
 
 function extFromMime(mimeType) {
   return extensionFromChatImageMime(mimeType) || extensionFromChatAudioMime(mimeType);
@@ -80,6 +81,20 @@ function isUploadBlobBase64WithinLimit(base64Data, mimeType) {
 function uploadBlobMaxBase64Chars(mimeType) {
   if (isAllowedUploadAudioMime(mimeType)) return MAX_CHAT_AUDIO_BASE64_CHARS;
   return MAX_CHAT_IMAGE_BASE64_CHARS;
+}
+
+function normalizeSessionFilePresentation(value) {
+  if (value == null || value === "") return "attachment";
+  if (typeof value !== "string") return null;
+  return SESSION_FILE_PRESENTATIONS.has(value) ? value : null;
+}
+
+function originForPresentation(presentation) {
+  return presentation === "voice-input" ? "voice_input" : "user_upload";
+}
+
+function listedForPresentation(presentation) {
+  return presentation !== "voice-input";
 }
 
 function isControlCodePoint(codePoint) {
@@ -338,7 +353,14 @@ export function createUploadRoute(engine) {
     const sessionPath = normalizeSessionPath(body?.sessionPath);
     let blobs = body?.blobs;
     if (!Array.isArray(blobs)) {
-      if (body?.base64Data) blobs = [{ name: body.name, base64Data: body.base64Data, mimeType: body.mimeType }];
+      if (body?.base64Data) {
+        blobs = [{
+          name: body.name,
+          base64Data: body.base64Data,
+          mimeType: body.mimeType,
+          presentation: body.presentation,
+        }];
+      }
       else return c.json({ error: t("error.pathsRequired") }, 400);
     }
     if (blobs.length === 0) return c.json({ error: t("error.pathsRequired") }, 400);
@@ -370,6 +392,15 @@ export function createUploadRoute(engine) {
           results.push({ error: `blob too large (max ${uploadBlobMaxBase64Chars(mimeType)} bytes)` });
           continue;
         }
+        const presentation = normalizeSessionFilePresentation(blobs[i]?.presentation ?? body?.presentation);
+        if (!presentation) {
+          results.push({ error: "unsupported presentation" });
+          continue;
+        }
+        if (presentation === "voice-input" && !isAllowedUploadAudioMime(mimeType)) {
+          results.push({ error: "voice-input requires audio mimeType" });
+          continue;
+        }
         const buf = Buffer.from(base64Data, "base64");
         if (buf.length === 0) {
           results.push({ error: "empty blob" });
@@ -388,8 +419,10 @@ export function createUploadRoute(engine) {
           sessionPath,
           filePath: destPath,
           label: safeName,
-          origin: "user_upload",
+          origin: originForPresentation(presentation),
           storageKind: uploadTarget.storageKind,
+          presentation,
+          listed: listedForPresentation(presentation),
         });
 
         results.push({

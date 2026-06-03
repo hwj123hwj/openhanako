@@ -188,6 +188,36 @@ describe('expired session file presentation', () => {
     expect(audioInstances[0].play).toHaveBeenCalledTimes(1);
   });
 
+  it('renders voice-input audio messages as waveform-only chips without visible filenames', () => {
+    render(
+      <UserMessage
+        showAvatar={false}
+        sessionPath="/sessions/main.jsonl"
+        readOnly
+        message={{
+          id: 'u-voice-input',
+          role: 'user',
+          text: '',
+          attachments: [
+            {
+              fileId: 'sf_audio',
+              path: '/cache/voice.wav',
+              name: '录音 1.wav',
+              isDir: false,
+              mimeType: 'audio/wav',
+              presentation: 'voice-input',
+              listed: false,
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.queryByText('录音 1.wav')).not.toBeInTheDocument();
+    expect(screen.getByTestId('audio-attachment-wave')).toBeInTheDocument();
+    expect(screen.getByLabelText('Play 录音 1.wav')).toBeInTheDocument();
+  });
+
   it('renders assistant file actions as a split button with reveal and copy menu actions', async () => {
     render(
       <AssistantMessage

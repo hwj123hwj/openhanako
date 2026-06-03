@@ -796,7 +796,10 @@
     "interface": {
       "system": "System",
       "hardwareAcceleration": "Hardware Acceleration",
-      "hardwareAccelerationHint": "Use the GPU to render app windows. Turning this off takes effect on next launch and uses software rendering for Windows GPU-driver startup recovery."
+      "hardwareAccelerationHint": "Use the GPU to render app windows. Turning this off takes effect on next launch and uses software rendering for Windows GPU-driver startup recovery.",
+      "shortcuts": "Shortcuts",
+      "voiceRecordingShortcut": "Voice recording/send",
+      "voiceRecordingShortcutHint": "When the main chat page is focused, press once to start recording, then press again to finish and send."
     },
     "editor": {
       "title": "Editor",

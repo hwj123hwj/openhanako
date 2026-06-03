@@ -4,7 +4,13 @@
  * 替代 app-messages-shim.ts loadMessages() 中的 DOM 构建循环。
  */
 
-import type { ChatMessage, ChatListItem, ContentBlock } from '../stores/chat-types';
+import type {
+  ChatMessage,
+  ChatListItem,
+  ContentBlock,
+  SessionRegistryFile,
+  UserAttachment,
+} from '../stores/chat-types';
 import type { TodoItem } from '../types';
 import { parseMoodFromContent, parseCardFromContent, parseUserAttachments } from './message-parser';
 import { renderMarkdown } from './markdown';
@@ -34,6 +40,11 @@ const MEDIA_ONLY_PLACEHOLDER_TEXT = new Set([
   '(오디오 듣기)',
 ]);
 
+// 历史里可能残留 provider/model 边界注入的图片尺寸提示。
+// 这类 <file name="image-N"> 行只服务于模型坐标换算，不属于用户输入的可见正文。
+const LEGACY_IMAGE_DIMENSION_NOTE_LINE_RE =
+  /^<file name="image-\d+">\[Image: original \d+x\d+, displayed at \d+x\d+\. Multiply coordinates by \d+(?:\.\d+)? to map to original image\.\]<\/file>$/;
+
 // ── API 响应类型 ──
 
 export interface HistoryApiResponse {
@@ -47,12 +58,13 @@ export interface HistoryApiResponse {
     images?: Array<{ data: string; mimeType: string }>;
     timestamp?: number | string | null;
   }>;
+  sessionFiles?: SessionRegistryFile[];
   blocks?: Array<any>;
   // COMPAT(v0.98/v0.127, remove no earlier than v0.133):
   // 以下三个老字段在新服务端不再返回；其中 artifacts 仅保留为旧 session 恢复协议。
   fileOutputs?: Array<{
     afterIndex: number;
-    files: Array<{ fileId?: string; filePath: string; label: string; ext: string; mime?: string; kind?: string; storageKind?: string; status?: string; missingAt?: number | null }>;
+    files: Array<{ fileId?: string; filePath: string; label: string; ext: string; mime?: string; kind?: string; storageKind?: string; presentation?: string; listed?: boolean; status?: string; missingAt?: number | null }>;
   }>;
   artifacts?: Array<{
     afterIndex: number;
@@ -68,6 +80,8 @@ export interface HistoryApiResponse {
     mime?: string;
     kind?: string;
     storageKind?: string;
+    presentation?: string;
+    listed?: boolean;
     status?: string;
     missingAt?: number | null;
   }>;
@@ -165,11 +179,93 @@ function basenamePortable(value: string): string {
   return slash >= 0 ? normalized.slice(slash + 1) : normalized;
 }
 
+function normalizePathKey(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed.replace(/\\/g, '/');
+}
+
+function buildSessionFileLookup(sessionFiles: unknown): Map<string, SessionRegistryFile> {
+  const lookup = new Map<string, SessionRegistryFile>();
+  if (!Array.isArray(sessionFiles)) return lookup;
+  for (const file of sessionFiles) {
+    if (!isRecord(file)) continue;
+    const record = file as SessionRegistryFile;
+    const keys = [
+      normalizePathKey(record.filePath),
+      normalizePathKey(record.realPath),
+      normalizePathKey(record.resource?.links?.content),
+      normalizePathKey(record.resource?.links?.self),
+    ].filter((key): key is string => !!key);
+    for (const key of keys) {
+      if (!lookup.has(key)) lookup.set(key, record);
+    }
+  }
+  return lookup;
+}
+
+// 历史 marker 只表达“这条消息引用了哪个文件”。展示名、mime、生命周期状态
+// 必须来自 SessionFile 账本；账本不存在时才退回 marker path 的 basename。
+function displayNameForSessionFile(file: SessionRegistryFile | null | undefined, fallbackPath: string): string {
+  if (file?.displayName) return file.displayName;
+  if (file?.label) return file.label;
+  if (file?.filename) return file.filename;
+  return basenamePortable(fallbackPath);
+}
+
+function presentationForSessionFile(file: SessionRegistryFile | null | undefined, fallback?: Partial<UserAttachment>): string {
+  if (file?.presentation === 'voice-input' || fallback?.presentation === 'voice-input') return 'voice-input';
+  return 'attachment';
+}
+
+function listedForSessionFile(file: SessionRegistryFile | null | undefined, fallback?: Partial<UserAttachment>): boolean {
+  if (typeof file?.listed === 'boolean') return file.listed;
+  if (typeof fallback?.listed === 'boolean') return fallback.listed;
+  return presentationForSessionFile(file, fallback) !== 'voice-input';
+}
+
+function attachmentFromRef(
+  ref: { path: string; name: string; isDirectory?: boolean },
+  sessionFileLookup: Map<string, SessionRegistryFile>,
+  fallback?: Partial<UserAttachment>,
+): UserAttachment {
+  const sessionFile = sessionFileLookup.get(normalizePathKey(ref.path) || '');
+  const fileId = sessionFile?.fileId || sessionFile?.id;
+  const filePath = sessionFile?.filePath || sessionFile?.realPath || ref.path;
+  const mimeType = sessionFile?.mime || fallback?.mimeType;
+  const status = sessionFile?.status || fallback?.status;
+  const hasMissingAt = !!sessionFile && Object.prototype.hasOwnProperty.call(sessionFile, 'missingAt')
+    ? true
+    : !!fallback && Object.prototype.hasOwnProperty.call(fallback, 'missingAt');
+  const missingAt = !!sessionFile && Object.prototype.hasOwnProperty.call(sessionFile, 'missingAt')
+    ? sessionFile.missingAt
+    : fallback?.missingAt;
+  const presentation = presentationForSessionFile(sessionFile, fallback);
+  const listed = listedForSessionFile(sessionFile, fallback);
+  return {
+    ...(fileId ? { fileId } : {}),
+    path: filePath,
+    name: displayNameForSessionFile(sessionFile, ref.path || ref.name),
+    isDir: sessionFile?.isDirectory ?? ref.isDirectory ?? false,
+    ...(mimeType ? { mimeType } : {}),
+    ...(presentation !== 'attachment' ? { presentation } : {}),
+    ...(listed === false ? { listed } : {}),
+    ...(status ? { status } : {}),
+    ...(hasMissingAt ? { missingAt } : {}),
+  };
+}
+
 function normalizeUserVisibleText(text: string, hasMediaAttachment: boolean): string {
   if (!hasMediaAttachment) return text;
-  const trimmed = text.trim();
+  const withoutLegacyImageNotes = text
+    .split(/\r?\n/)
+    .filter(line => !LEGACY_IMAGE_DIMENSION_NOTE_LINE_RE.test(line.trim()))
+    .join('\n')
+    .trim();
+  const trimmed = withoutLegacyImageNotes.trim();
   if (!trimmed) return '';
-  return MEDIA_ONLY_PLACEHOLDER_TEXT.has(trimmed) ? '' : text;
+  return MEDIA_ONLY_PLACEHOLDER_TEXT.has(trimmed) ? '' : withoutLegacyImageNotes;
 }
 
 function normalizeHistoryBlock(raw: unknown): Record<string, any> | null {
@@ -231,6 +327,7 @@ function normalizeHistoryTimestamp(value: number | string | null | undefined): n
 
 export function buildItemsFromHistory(data: HistoryApiResponse): ChatListItem[] {
   const items: ChatListItem[] = [];
+  const sessionFileLookup = buildSessionFileLookup(data.sessionFiles);
 
   // 按 afterIndex 分组统一 blocks
   const allBlocks = normalizeBlocks(data);
@@ -258,20 +355,17 @@ export function buildItemsFromHistory(data: HistoryApiResponse): ChatListItem[] 
       const { text, files, attachedImages, attachedVideos, attachedAudios, deskContext, quotedText } = parseUserAttachments(rawContent);
       const hasMarkerMedia = attachedImages.length > 0 || attachedVideos.length > 0 || attachedAudios.length > 0;
       const visibleText = normalizeUserVisibleText(text, hasMarkerMedia);
-      const fileAtts = files.map(f => ({
+      const fileAtts = files.map(f => attachmentFromRef({
         path: f.path,
         name: f.name,
-        isDir: f.isDirectory,
-      }));
+        isDirectory: f.isDirectory,
+      }, sessionFileLookup));
       const imageBlocks = m.images || [];
       const markerImageAtts = attachedImages.map((ref, idx) => {
         const img = imageBlocks[idx];
-        return {
-          path: ref.path,
-          name: ref.name,
-          isDir: false,
-          mimeType: img?.mimeType,
-        };
+        return attachmentFromRef(ref, sessionFileLookup, {
+          ...(img?.mimeType ? { mimeType: img.mimeType } : {}),
+        });
       });
       const imageAtts = imageBlocks.slice(attachedImages.length).map((img, idx) => ({
         path: `image-${idx}`,
@@ -280,16 +374,8 @@ export function buildItemsFromHistory(data: HistoryApiResponse): ChatListItem[] 
         base64Data: img.data,
         mimeType: img.mimeType,
       }));
-      const markerVideoAtts = attachedVideos.map((ref) => ({
-        path: ref.path,
-        name: ref.name,
-        isDir: false,
-      }));
-      const markerAudioAtts = attachedAudios.map((ref) => ({
-        path: ref.path,
-        name: ref.name,
-        isDir: false,
-      }));
+      const markerVideoAtts = attachedVideos.map((ref) => attachmentFromRef(ref, sessionFileLookup));
+      const markerAudioAtts = attachedAudios.map((ref) => attachmentFromRef(ref, sessionFileLookup));
       const allAtts = [...fileAtts, ...markerImageAtts, ...markerVideoAtts, ...markerAudioAtts, ...imageAtts];
       const msg: ChatMessage = {
         id,

@@ -432,6 +432,8 @@ describe('InputArea media send', () => {
             fileId: 'sf_recording',
             dest: '/tmp/hana/session-files/recording.wav',
             name: '录音 1.wav',
+            presentation: 'voice-input',
+            listed: false,
           }],
         }), { status: 200 });
       }
@@ -475,6 +477,7 @@ describe('InputArea media send', () => {
     await waitFor(() => {
       expect(mocks.hanaFetch).toHaveBeenCalledWith('/api/upload-blob', expect.objectContaining({
         method: 'POST',
+        body: expect.stringContaining('"presentation":"voice-input"'),
       }));
       expect(mocks.wsSend).toHaveBeenCalledTimes(1);
     });
@@ -493,6 +496,8 @@ describe('InputArea media send', () => {
         name: '录音 1.wav',
         isDir: false,
         mimeType: 'audio/wav',
+        presentation: 'voice-input',
+        listed: false,
       }],
     });
     expect(useStore.getState().attachedFiles).toEqual([]);

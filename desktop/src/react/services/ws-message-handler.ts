@@ -757,6 +757,8 @@ function applyContentBlockSessionFile(msg: any): void {
     mime: block.mime,
     kind: block.kind,
     storageKind: block.storageKind,
+    presentation: block.presentation,
+    listed: block.listed,
     status: block.status,
     missingAt: block.missingAt,
     mtimeMs: block.mtimeMs,

@@ -128,4 +128,14 @@ describe('InterfaceTab appearance state', () => {
     expect(screen.queryByText('settings.editor.markdownHeading5FontSize')).toBeNull();
     expect(screen.queryByText('settings.editor.markdownHeading6FontSize')).toBeNull();
   });
+
+  it('renders the app-local voice recording shortcut in the interface tab', () => {
+    useSettingsStore.setState({ platformName: 'darwin' } as never);
+
+    render(React.createElement(InterfaceTab));
+
+    expect(screen.getByText('settings.interface.shortcuts')).toBeTruthy();
+    expect(screen.getByText('settings.interface.voiceRecordingShortcut')).toBeTruthy();
+    expect(screen.getByLabelText('⌘ + ⇧ + M')).toBeTruthy();
+  });
 });

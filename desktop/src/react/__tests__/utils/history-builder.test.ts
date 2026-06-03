@@ -161,6 +161,119 @@ describe('buildItemsFromHistory user image restoration', () => {
     }]);
   });
 
+  it('从 SessionFile 账本恢复历史音频附件的展示名和元信息', () => {
+    const filePath = '/Users/test/.hanako/session-files/hash/录音 1_mpykkdz7_35680467.wav';
+    const items = buildItemsFromHistory({
+      messages: [{
+        id: 'u1',
+        role: 'user',
+        content: `[attached_audio: ${filePath}]`,
+      }],
+      sessionFiles: [{
+        fileId: 'sf_voice_1',
+        filePath,
+        realPath: filePath,
+        displayName: '录音 1.wav',
+        label: '录音 1.wav',
+        filename: '录音 1_mpykkdz7_35680467.wav',
+        mime: 'audio/wav',
+        kind: 'audio',
+        status: 'available',
+        missingAt: null,
+      }],
+    } as any);
+
+    const first = items[0];
+    expect(first.type).toBe('message');
+    if (first.type !== 'message') throw new Error('expected message');
+    expect(first.data.text).toBe('');
+    expect(first.data.textHtml).toBeUndefined();
+    expect(first.data.attachments).toEqual([{
+      fileId: 'sf_voice_1',
+      path: filePath,
+      name: '录音 1.wav',
+      isDir: false,
+      mimeType: 'audio/wav',
+      status: 'available',
+      missingAt: null,
+    }]);
+  });
+
+  it('从 SessionFile 账本恢复 voice-input 音频附件的展示语义', () => {
+    const filePath = '/Users/test/.hanako/session-files/hash/录音 1_mpykkdz7_35680467.wav';
+    const items = buildItemsFromHistory({
+      messages: [{
+        id: 'u-voice-input',
+        role: 'user',
+        content: `[attached_audio: ${filePath}]\n（听音频）`,
+      }],
+      sessionFiles: [{
+        fileId: 'sf_voice_1',
+        filePath,
+        displayName: '录音 1.wav',
+        mime: 'audio/wav',
+        kind: 'audio',
+        presentation: 'voice-input',
+        listed: false,
+        status: 'available',
+        missingAt: null,
+      }],
+    });
+
+    const first = items[0];
+    if (first.type !== 'message') throw new Error('expected message');
+    expect(first.data.text).toBe('');
+    expect(first.data.attachments).toEqual([{
+      fileId: 'sf_voice_1',
+      path: filePath,
+      name: '录音 1.wav',
+      isDir: false,
+      mimeType: 'audio/wav',
+      presentation: 'voice-input',
+      listed: false,
+      status: 'available',
+      missingAt: null,
+    }]);
+  });
+
+  it('从 SessionFile 账本恢复旧版图片附件，并把模型传输说明排除出可见正文', () => {
+    const filePath = '/Users/test/.hanako/uploads/粘贴图片_mpyjx6zr_fc3d70a9.png';
+    const items = buildItemsFromHistory({
+      messages: [{
+        id: 'u1',
+        role: 'user',
+        content: `[attached_image: ${filePath}]\n<file name="image-1">[Image: original 2236x1854, displayed at 2000x1658. Multiply coordinates by 1.12 to map to original image.]</file>\n（看图）`,
+      }],
+      sessionFiles: [{
+        fileId: 'sf_image_1',
+        filePath,
+        realPath: filePath,
+        displayName: '粘贴图片.png',
+        label: '粘贴图片.png',
+        filename: '粘贴图片_mpyjx6zr_fc3d70a9.png',
+        mime: 'image/png',
+        kind: 'image',
+        status: 'available',
+        missingAt: null,
+      }],
+    } as any);
+
+    const first = items[0];
+    expect(first.type).toBe('message');
+    if (first.type !== 'message') throw new Error('expected message');
+    expect(first.data.text).toBe('');
+    expect(first.data.textHtml).toBeUndefined();
+    expect(first.data.attachments).toEqual([{
+      fileId: 'sf_image_1',
+      path: filePath,
+      name: '粘贴图片.png',
+      isDir: false,
+      mimeType: 'image/png',
+      status: 'available',
+      missingAt: null,
+    }]);
+  });
+
   it('丢弃字段残缺的历史 sideband block，保留同消息的可渲染内容', () => {
     const items = buildItemsFromHistory({
       messages: [{

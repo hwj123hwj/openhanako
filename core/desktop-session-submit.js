@@ -197,8 +197,10 @@ function registerDisplayAttachments({ hanakoHome, sessionPath, attachments, regi
         sessionPath,
         filePath: next.path,
         label: next.name || path.basename(next.path),
-        origin: "user_attachment",
+        origin: originForDisplayAttachment(next),
         storageKind: displayAttachmentStorageKind(hanakoHome, next.path),
+        presentation: displayAttachmentPresentation(next),
+        listed: listedForDisplayAttachment(next),
       }));
       if (sessionFile) {
         next = {
@@ -207,6 +209,8 @@ function registerDisplayAttachments({ hanakoHome, sessionPath, attachments, regi
           name: next.name || sessionFile.displayName || sessionFile.filename || path.basename(next.path),
           mimeType: next.mimeType || sessionFile.mime,
           isDir: next.isDir || !!sessionFile.isDirectory,
+          presentation: sessionFile.presentation || displayAttachmentPresentation(next),
+          listed: sessionFile.listed !== undefined ? sessionFile.listed !== false : listedForDisplayAttachment(next),
           status: sessionFile.status,
           missingAt: sessionFile.missingAt,
         };
@@ -239,6 +243,18 @@ function registerDisplayAttachments({ hanakoHome, sessionPath, attachments, regi
     videoAttachmentPaths: uniquePaths(videoAttachmentPaths),
     audioAttachmentPaths: uniquePaths(audioAttachmentPaths),
   };
+}
+
+function displayAttachmentPresentation(attachment) {
+  return attachment?.presentation === "voice-input" ? "voice-input" : "attachment";
+}
+
+function listedForDisplayAttachment(attachment) {
+  return displayAttachmentPresentation(attachment) !== "voice-input";
+}
+
+function originForDisplayAttachment(attachment) {
+  return displayAttachmentPresentation(attachment) === "voice-input" ? "voice_input" : "user_attachment";
 }
 
 function displayAttachmentStorageKind(hanakoHome, filePath) {

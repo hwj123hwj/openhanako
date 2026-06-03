@@ -469,6 +469,59 @@ describe('selectSessionFiles', () => {
     });
   });
 
+  it('会话文件列表默认排除 voice-input，但仍保留普通音频附件', () => {
+    const refs = selectSessionFiles(sessionState([], '/s/listed-voice', [{
+      fileId: 'sf_voice_input',
+      filePath: '/cache/voice-input.wav',
+      label: '录音 1.wav',
+      ext: 'wav',
+      mime: 'audio/wav',
+      kind: 'audio',
+      presentation: 'voice-input',
+      listed: false,
+      status: 'available',
+    }, {
+      fileId: 'sf_uploaded_audio',
+      filePath: '/cache/uploaded.wav',
+      label: '会议录音.wav',
+      ext: 'wav',
+      mime: 'audio/wav',
+      kind: 'audio',
+      presentation: 'attachment',
+      listed: true,
+      status: 'available',
+    }]), '/s/listed-voice');
+
+    expect(refs.map(r => r.fileId)).toEqual(['sf_uploaded_audio']);
+    expect(refs[0]).toMatchObject({
+      name: '会议录音.wav',
+      presentation: 'attachment',
+      listed: true,
+    });
+  });
+
+  it('聊天恢复用途会保留 voice-input 并携带展示语义', () => {
+    const refs = selectSessionFiles(sessionState([], '/s/chat-voice', [{
+      fileId: 'sf_voice_input',
+      filePath: '/cache/voice-input.wav',
+      label: '录音 1.wav',
+      ext: 'wav',
+      mime: 'audio/wav',
+      kind: 'audio',
+      presentation: 'voice-input',
+      listed: false,
+      status: 'available',
+    }]), '/s/chat-voice', { includeUnlisted: true });
+
+    expect(refs).toHaveLength(1);
+    expect(refs[0]).toMatchObject({
+      fileId: 'sf_voice_input',
+      kind: 'audio',
+      presentation: 'voice-input',
+      listed: false,
+    });
+  });
+
   it('跨多消息按消息顺序', () => {
     const items: ChatListItem[] = [
       { type: 'message', data: { id: '1', role: 'user', attachments: [{ path: '/1.png', name: '1.png', isDir: false }] } },

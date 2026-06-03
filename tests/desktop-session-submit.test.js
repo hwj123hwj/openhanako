@@ -399,6 +399,8 @@ describe("submitDesktopSessionMessage", () => {
         label: "voice.wav",
         origin: "user_attachment",
         storageKind: "external",
+        presentation: "attachment",
+        listed: true,
       });
       expect(engine.promptSession).toHaveBeenCalledWith(
         sessionPath,
@@ -469,6 +471,8 @@ describe("submitDesktopSessionMessage", () => {
         label: "desk.png",
         origin: "user_attachment",
         storageKind: "external",
+        presentation: "attachment",
+        listed: true,
       });
       expect(engine.emitEvent).toHaveBeenCalledWith(
         expect.objectContaining({

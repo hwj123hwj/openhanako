@@ -199,6 +199,38 @@ describe("SessionFileRegistry", () => {
     expect(registry.list(sessionPath)).toEqual([first]);
   });
 
+  it("persists voice-input presentation and listing policy in the session sidecar", () => {
+    const filePath = makeTempFile("voice.wav", "RIFF");
+    const sessionPath = makeSessionPath("voice.jsonl");
+    const registry = new SessionFileRegistry({ now: () => 1234 });
+
+    const file = registry.registerFile({
+      sessionPath,
+      filePath,
+      label: "录音 1.wav",
+      origin: "voice_input",
+      storageKind: "managed_cache",
+      presentation: "voice-input",
+      listed: false,
+    });
+
+    expect(file).toMatchObject({
+      presentation: "voice-input",
+      listed: false,
+      origin: "voice_input",
+    });
+    expect(readSidecar(sessionPath).files[file.id]).toMatchObject({
+      presentation: "voice-input",
+      listed: false,
+    });
+
+    const reloaded = new SessionFileRegistry({ now: () => 9999 });
+    expect(reloaded.get(file.id, { sessionPath })).toMatchObject({
+      presentation: "voice-input",
+      listed: false,
+    });
+  });
+
   it("keeps one session file per path and records file relationship operations", () => {
     const filePath = makeTempFile("draft.md", "first\n");
     const sessionPath = makeSessionPath("relationships.jsonl");
