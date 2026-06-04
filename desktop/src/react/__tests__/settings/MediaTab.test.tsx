@@ -34,7 +34,7 @@ vi.mock('../../settings/components/SettingsRow', () => ({
 
 vi.mock('../../settings/tabs/media/MediaProviderDetail', () => ({
   MediaProviderDetail: ({ providerId }: { providerId: string }) => (
-    <div data-testid="media-provider-detail">{providerId}</div>
+    <div data-testid="media-provider-detail">image:{providerId}</div>
   ),
 }));
 
@@ -171,7 +171,51 @@ describe('MediaTab image-gen config', () => {
 
     render(<MediaTab />);
 
-    expect(await screen.findByTestId('media-provider-detail')).toHaveTextContent('volcengine');
+    expect(await screen.findByTestId('media-provider-detail')).toHaveTextContent('image:volcengine');
+  });
+
+  it('switches the detail pane to speech recognition providers without falling back to image provider details', async () => {
+    mocks.hanaFetch.mockImplementation((path: string) => {
+      if (path === '/api/plugins/image-gen/providers') {
+        return Promise.resolve(jsonResponse({
+          providers: {
+            dashscope: {
+              providerId: 'dashscope',
+              displayName: 'DashScope Images',
+              hasCredentials: true,
+              models: [{ id: 'qwen-image', name: 'Qwen Image' }],
+              availableModels: [],
+            },
+          },
+          config: {},
+        }));
+      }
+      if (path === '/api/speech-recognition/providers') {
+        return Promise.resolve(jsonResponse({
+          providers: {
+            dashscope: {
+              providerId: 'dashscope',
+              displayName: 'DashScope Speech',
+              hasCredentials: true,
+              models: [{ id: 'qwen3-asr-flash', name: 'Qwen ASR Flash', adapterAvailable: true }],
+              availableModels: [{ id: 'qwen3-asr-flash', name: 'Qwen ASR Flash' }],
+            },
+          },
+          config: { enabled: true, defaultModel: { provider: 'dashscope', id: 'qwen3-asr-flash' } },
+        }));
+      }
+      return Promise.resolve(jsonResponse({ values: {} }));
+    });
+
+    render(<MediaTab />);
+
+    expect(await screen.findByTestId('media-provider-detail')).toHaveTextContent('image:dashscope');
+    fireEvent.click(await screen.findByRole('button', { name: /DashScope Speech/ }));
+
+    expect(screen.queryByTestId('media-provider-detail')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'DashScope Speech' })).toBeInTheDocument();
+    expect(screen.getByText('Qwen ASR Flash')).toBeInTheDocument();
+    expect(screen.getByText('qwen3-asr-flash')).toBeInTheDocument();
   });
 
   it('does not offer image models with missing runtime adapters as selectable defaults', async () => {
@@ -257,7 +301,7 @@ describe('MediaTab image-gen config', () => {
 
     render(<MediaTab />);
 
-    const toggle = await screen.findByRole('switch', { name: '语音识别启用' });
+    const toggle = await screen.findByRole('switch', { name: '发送语音条时转录' });
     fireEvent.click(toggle);
 
     await waitFor(() => {
@@ -296,7 +340,7 @@ describe('MediaTab image-gen config', () => {
 
     render(<MediaTab />);
 
-    const select = await screen.findByLabelText('默认语音识别模型');
+    const select = await screen.findByLabelText('语音条转录模型');
     fireEvent.change(select, { target: { value: 'openai/whisper-1' } });
 
     await waitFor(() => {
@@ -333,7 +377,7 @@ describe('MediaTab image-gen config', () => {
 
     render(<MediaTab />);
 
-    const select = await screen.findByLabelText('默认语音识别模型');
+    const select = await screen.findByLabelText('语音条转录模型');
     const option = Array.from(select.querySelectorAll('option')).find((item) => item.value === 'openai/whisper-1');
     expect(option).toBeUndefined();
     expect(select).toBeDisabled();

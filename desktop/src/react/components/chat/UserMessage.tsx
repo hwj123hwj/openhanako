@@ -272,7 +272,7 @@ const UserAttachmentsView = memo(function UserAttachmentsView({ attachments, des
             : '';
           if (transcriptText) {
             return (
-              <div key={att.fileId || att.path || att.name || `att-${i}`} className={styles.voiceInputStack}>
+              <div key={att.fileId || att.path || att.name || `att-${i}`} className={styles.voiceInputCard}>
                 <div className={styles.voiceInputTranscript}>{transcriptText}</div>
                 <AudioAttachmentChip
                   file={{
@@ -282,6 +282,7 @@ const UserAttachmentsView = memo(function UserAttachmentsView({ attachments, des
                     mimeType: att.mimeType,
                   }}
                   showName={false}
+                  className={styles.voiceInputAudioStrip}
                 />
               </div>
             );

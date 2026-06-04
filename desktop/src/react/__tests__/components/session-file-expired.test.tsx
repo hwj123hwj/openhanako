@@ -247,8 +247,13 @@ describe('expired session file presentation', () => {
       />,
     );
 
-    expect(screen.getByText('今晚我们先把语音输入跑通。')).toBeInTheDocument();
-    expect(screen.getByTestId('audio-attachment-wave')).toBeInTheDocument();
+    const transcript = screen.getByText('今晚我们先把语音输入跑通。');
+    const wave = screen.getByTestId('audio-attachment-wave');
+    const voiceCard = transcript.closest('[class*="voiceInputCard"]');
+    expect(transcript).toBeInTheDocument();
+    expect(wave).toBeInTheDocument();
+    expect(voiceCard).toBeTruthy();
+    expect(voiceCard).toContainElement(wave);
     const userTextBubble = Array.from(container.querySelectorAll('div')).find((node) => {
       const className = String(node.getAttribute('class') || '');
       return className.includes('messageUser') && !className.includes('messageGroupUser');
