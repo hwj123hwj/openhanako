@@ -887,13 +887,13 @@ export function createSessionsRoute(engine, hub = null) {
 
           if (run?.status === "pending" && !task) {
             b.streamStatus = "failed";
-            b.summary = "历史子会话运行状态不可恢复";
+            b.summary = t("session.subagentRunStateUnrecoverable");
             continue;
           }
 
           if (!b.streamKey && !run && !task) {
             b.streamStatus = "failed";
-            b.summary = "历史子会话链接不可恢复";
+            b.summary = t("session.subagentLinkUnrecoverable");
           }
         }
       }
