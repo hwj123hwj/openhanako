@@ -721,11 +721,14 @@
     },
     "experiments": {
       "title": "Experiments",
+      "compactionTitle": "Context Compaction",
+      "compactionSectionDescription": "Choose whether compact prioritizes prompt-cache preservation or broad history compatibility.",
       "memoryTitle": "Cache Memory",
       "description": "Forward-looking features land here first. Once stable, they move to the settings page where they belong.",
       "empty": "No visible experiments",
       "owner": {
-        "memory": "Memory"
+        "memory": "Memory",
+        "session": "Session"
       },
       "status": {
         "alpha": "Alpha",
@@ -757,6 +760,13 @@
         "summaryTitle": "Rolling Summary Preview",
         "emptyPreview": "No observation yet",
         "clearObservation": "Clear observation"
+      },
+      "compaction": {
+        "title": "Compaction mode",
+        "description": "Auto prefers cache-preserving compaction. Normal compaction lets Pi SDK run its native summarizer, which is better for unstable history formats.",
+        "auto": "Auto",
+        "cachePreserving": "Cache-preserving compaction",
+        "piCompatible": "Normal compaction"
       }
     },
     "appearance": {
