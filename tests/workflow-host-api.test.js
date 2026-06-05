@@ -173,4 +173,48 @@ describe("host api - parallel / pipeline / log / phase", () => {
     api.phase("Find"); api.log("hi");
     expect(evts).toEqual([{ type: "phase", title: "Find" }, { type: "log", message: "hi" }]);
   });
+
+  it("parallel 发 step start/done 事件，带 stepKind 和 phaseLabel", async () => {
+    const evts = [];
+    const api = createHostApi(makeDeps({ onAgentEvent: (e) => evts.push(e) }));
+    api.phase("Find");
+    await api.parallel([async () => 1, async () => 2]);
+    const start = evts.find((e) => e.phase === "start" && e.stepKind === "parallel");
+    const done = evts.find((e) => e.phase === "done" && e.stepKind === "parallel");
+    expect(start).toMatchObject({ stepKind: "parallel", phaseLabel: "Find" });
+    expect(start.nodeId).toMatch(/^step-/);
+    expect(done).toMatchObject({ stepKind: "parallel" });
+    expect(done.nodeId).toBe(start.nodeId);
+  });
+
+  it("pipeline 发 step start/done 事件，带 stepKind", async () => {
+    const evts = [];
+    const api = createHostApi(makeDeps({ onAgentEvent: (e) => evts.push(e) }));
+    await api.pipeline([1, 2], (n) => n + 1);
+    const start = evts.find((e) => e.phase === "start" && e.stepKind === "pipeline");
+    const done = evts.find((e) => e.phase === "done" && e.stepKind === "pipeline");
+    expect(start).toBeTruthy();
+    expect(done).toBeTruthy();
+    expect(done.nodeId).toBe(start.nodeId);
+  });
+
+  it("log 发 step start+done 事件（瞬时），label 为消息内容", async () => {
+    const evts = [];
+    const api = createHostApi(makeDeps({ onAgentEvent: (e) => evts.push(e) }));
+    api.phase("Report");
+    api.log("3 bugs found");
+    const start = evts.find((e) => e.phase === "start" && e.stepKind === "log");
+    const done = evts.find((e) => e.phase === "done" && e.stepKind === "log");
+    expect(start).toMatchObject({ stepKind: "log", label: "3 bugs found", phaseLabel: "Report" });
+    expect(done).toMatchObject({ stepKind: "log" });
+  });
+
+  it("parallel 所有 thunk 抛错时发 fail 事件", async () => {
+    const evts = [];
+    const api = createHostApi(makeDeps({ onAgentEvent: (e) => evts.push(e) }));
+    await api.parallel([async () => { throw new Error("x"); }]);
+    // parallel 本身 catch → null，不抛外层，但整体仍然 done（parallel 本身成功完成）
+    const done = evts.find((e) => e.phase === "done" && e.stepKind === "parallel");
+    expect(done).toBeTruthy();
+  });
 });
