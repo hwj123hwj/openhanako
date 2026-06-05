@@ -129,6 +129,20 @@ describe("ActivityHub", () => {
     expect(e.status).toBe("done");
     expect(e.startedAt).toBe(1000);
   });
+
+  it("workflow_step kind 被接受，stepKind 字段保留", () => {
+    const hub = new ActivityHub();
+    hub.upsert({
+      id: "wf-1::step-1", kind: "workflow_step", status: "running",
+      sessionPath: "/s/a.jsonl", parentTaskId: "wf-1", stepKind: "parallel",
+      phaseLabel: "Find", startedAt: 1000,
+    });
+    const e = hub.get("wf-1::step-1");
+    expect(e.kind).toBe("workflow_step");
+    expect(e.stepKind).toBe("parallel");
+    expect(e.phaseLabel).toBe("Find");
+    expect(e.parentTaskId).toBe("wf-1");
+  });
 });
 
 // ── 持久化背书（重启不丢右侧 workflow 卡）──
@@ -155,6 +169,7 @@ describe("ActivityHub 持久化背书", () => {
     hub.upsert({ id: "wf-1", kind: "workflow", status: "running", sessionPath: "/s/a.jsonl" });
     hub.upsert({ id: "wf-1::n1", kind: "workflow_agent", status: "running", sessionPath: "/s/a.jsonl", parentTaskId: "wf-1" });
     hub.upsert({ id: "sub-1", kind: "subagent", status: "running", sessionPath: "/s/a.jsonl" });
+    hub.upsert({ id: "step-1", kind: "workflow_step", status: "done", sessionPath: "/s/a.jsonl", parentTaskId: "wf-1", stepKind: "pipeline" });
     hub.upsert({ id: "hb-1", kind: "heartbeat", status: "running", sessionPath: "/s/a.jsonl" });
     hub.upsert({ id: "cron-1", kind: "cron", status: "running", sessionPath: "/s/a.jsonl" });
 
@@ -162,6 +177,7 @@ describe("ActivityHub 持久化背书", () => {
     expect(persistedIds).toContain("wf-1");
     expect(persistedIds).toContain("wf-1::n1");
     expect(persistedIds).toContain("sub-1");        // subagent 现在也持久化（右侧子助手卡重启复原）
+    expect(persistedIds).toContain("step-1");
     expect(persistedIds).not.toContain("hb-1");
     expect(persistedIds).not.toContain("cron-1");
   });
