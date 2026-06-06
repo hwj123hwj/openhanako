@@ -4,6 +4,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { upsertStudioMount } from "../core/studio-mounts.ts";
+import { normalizeWorkspacePath } from "../shared/workspace-history.ts";
 
 const { replayLatestUserTurnMock } = vi.hoisted(() => ({
   replayLatestUserTurnMock: vi.fn(async () => ({ text: null, toolMedia: [] })),
@@ -247,7 +248,7 @@ describe("sessions route", () => {
     );
     expect(engine.updateConfig).toHaveBeenCalledWith({
       last_cwd: resolvedMountedRoot,
-      cwd_history: [resolvedMountedRoot],
+      cwd_history: [normalizeWorkspacePath(resolvedMountedRoot)],
     });
     expect(data.cwd).toBe(resolvedMountedRoot);
     expect(data.workspaceMountId).toBe("mount_docs");

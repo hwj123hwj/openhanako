@@ -87,7 +87,7 @@ describe("updateConfig with agentId", () => {
     const blockedHome = path.join(os.tmpdir(), `hana-blocked-home-${Date.now()}`);
     const originalStatSync = fs.statSync;
     const statSpy = vi.spyOn(fs, "statSync").mockImplementation((target, ...args) => {
-      if (target === blockedHome) {
+      if (typeof target === "string" && path.normalize(target) === path.normalize(blockedHome)) {
         throw Object.assign(new Error("permission denied"), { code: "EACCES" });
       }
       return originalStatSync.call(fs, target, ...args);

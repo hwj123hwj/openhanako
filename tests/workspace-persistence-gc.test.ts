@@ -60,7 +60,7 @@ describe("workspace persistence GC", () => {
     const blockedWorkspace = path.join(root, "blocked");
     const originalStatSync = fs.statSync;
     const statSpy = vi.spyOn(fs, "statSync").mockImplementation((target, ...args) => {
-      if (target === blockedWorkspace) {
+      if (typeof target === "string" && path.normalize(target) === path.normalize(blockedWorkspace)) {
         throw Object.assign(new Error("permission denied"), { code: "EACCES" });
       }
       return originalStatSync.call(fs, target, ...args);
