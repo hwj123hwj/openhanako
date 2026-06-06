@@ -797,6 +797,24 @@ describe("migration #2: migrateBridgeToPerAgent", () => {
     expect(cfgB.bridge.telegram).toBeUndefined();
   });
 
+  it("preserves explicit global bridge permission mode while moving platform config to agents", () => {
+    writeAgentConfig(agentsDir, "hana", { api: { provider: "" } });
+    const prefs = makePrefs(userDir);
+    prefs.savePreferences({
+      primaryAgent: "hana",
+      bridge: {
+        permissionMode: "operate",
+        telegram: { token: "tok123" },
+      },
+    });
+
+    runMigration2(prefs);
+
+    const config = readAgentConfig(agentsDir, "hana");
+    expect(config.bridge.telegram.token).toBe("tok123");
+    expect(prefs.getPreferences().bridge).toEqual({ permissionMode: "operate" });
+  });
+
   it("legacy owner key：owner.telegram（无 composite）→ 归入 primary agent", () => {
     writeAgentConfig(agentsDir, "hana", { api: { provider: "" } });
     const prefs = makePrefs(userDir);

@@ -86,9 +86,10 @@ describe("splitByScope", () => {
     expect(agent.desk.heartbeat_master).toBeUndefined();
   });
 
-  it("extracts bridge.readOnly and bridge.receiptEnabled as global while keeping platform config", () => {
+  it("extracts bridge permission globals while keeping platform config", () => {
     const partial = {
       bridge: {
+        permissionMode: "auto",
         readOnly: true,
         receiptEnabled: false,
         telegram: { token: "tg-token" },
@@ -97,10 +98,12 @@ describe("splitByScope", () => {
     const { global: g, agent } = splitByScope(partial);
 
     expect(g).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: "bridge.permissionMode", value: "auto" }),
       expect.objectContaining({ key: "bridge.readOnly", value: true }),
       expect.objectContaining({ key: "bridge.receiptEnabled", value: false }),
     ]));
     expect(agent.bridge.telegram).toEqual({ token: "tg-token" });
+    expect(agent.bridge.permissionMode).toBeUndefined();
     expect(agent.bridge.readOnly).toBeUndefined();
     expect(agent.bridge.receiptEnabled).toBeUndefined();
   });
@@ -189,6 +192,7 @@ describe("injectGlobalFields", () => {
       getThinkingLevel: () => "high",
       getLearnSkills: () => true,
       getHeartbeatMaster: () => true,
+      getBridgePermissionMode: () => "auto",
       getBridgeReadOnly: () => true,
       getBridgeReceiptEnabled: () => false,
       getNetworkProxy: () => ({ mode: "direct" }),
@@ -206,6 +210,7 @@ describe("injectGlobalFields", () => {
     expect(config.thinking_level).toBe("high");
     expect(config.capabilities?.learn_skills).toBe(true);
     expect(config.desk?.heartbeat_master).toBe(true);
+    expect(config.bridge?.permissionMode).toBe("auto");
     expect(config.bridge?.readOnly).toBe(true);
     expect(config.bridge?.receiptEnabled).toBe(false);
     expect(config.network_proxy).toEqual({ mode: "direct" });
@@ -228,6 +233,7 @@ describe("injectGlobalFields", () => {
     const engine = {
       getLearnSkills: () => false,
       getHeartbeatMaster: () => false,
+      getBridgePermissionMode: () => "read_only",
       getBridgeReadOnly: () => false,
       getBridgeReceiptEnabled: () => true,
     };
@@ -239,6 +245,7 @@ describe("injectGlobalFields", () => {
     expect(config.desk).toBeDefined();
     expect(config.desk.heartbeat_master).toBe(false);
     expect(config.bridge).toBeDefined();
+    expect(config.bridge.permissionMode).toBe("read_only");
     expect(config.bridge.readOnly).toBe(false);
     expect(config.bridge.receiptEnabled).toBe(true);
   });

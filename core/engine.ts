@@ -921,6 +921,8 @@ export class HanaEngine {
   getChannelsEnabled() { return this._configCoord.getChannelsEnabled(); }
   async setChannelsEnabled(v) { return this._configCoord.setChannelsEnabled(v); }
   isChannelsEnabled() { return this._configCoord.getChannelsEnabled(); }
+  getBridgePermissionMode() { return this._prefs.getBridgePermissionMode(); }
+  setBridgePermissionMode(v) { return this._prefs.setBridgePermissionMode(v); }
   getBridgeReadOnly() { return this._prefs.getBridgeReadOnly(); }
   setBridgeReadOnly(v) { this._prefs.setBridgeReadOnly(v); }
   getBridgeReceiptEnabled() { return this._prefs.getBridgeReceiptEnabled(); }
@@ -1882,12 +1884,14 @@ export class HanaEngine {
       : (sessionPath) => this.getSessionPermissionMode(sessionPath);
     // 拦截上下文（如 { isSubagent }）：classify 据此做与 mode 无关的固定边界（防自递归等）。
     const permissionContext = opts.permissionContext || null;
+    const allowHumanApproval = opts.allowHumanApproval !== false;
     result = {
       ...result,
       tools: wrapWithSessionPermission(result.tools, {
         getSessionPath,
         getPermissionMode,
         permissionContext,
+        allowHumanApproval,
         getConfirmStore: () => this._confirmStore,
         getApprovalGateway: () => this._approvalGateway,
         emitEvent: (event, sessionPath) => this._emitEvent(event, sessionPath),
@@ -1896,6 +1900,7 @@ export class HanaEngine {
         getSessionPath,
         getPermissionMode,
         permissionContext,
+        allowHumanApproval,
         getConfirmStore: () => this._confirmStore,
         getApprovalGateway: () => this._approvalGateway,
         emitEvent: (event, sessionPath) => this._emitEvent(event, sessionPath),

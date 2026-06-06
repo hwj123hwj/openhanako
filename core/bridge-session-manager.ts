@@ -22,7 +22,7 @@ import {
 import { isAbortLikeError, prepareVisionInputForTextOnlyModel } from "./vision-prepare.ts";
 import { prepareModelImageInputsForPrompt } from "./model-image-preprocess.ts";
 import { withVisionContextInjectionExtension } from "./vision-context-injector.ts";
-import { SESSION_PERMISSION_MODES } from "./session-permission-mode.ts";
+import { normalizeBridgePermissionMode, SESSION_PERMISSION_MODES } from "./session-permission-mode.ts";
 import { uniqueToolNames } from "../shared/tool-categories.ts";
 import { collectMediaItems } from "../lib/tools/media-details.ts";
 import { formatSettingsUpdateText } from "../lib/tools/settings-update-result.ts";
@@ -666,7 +666,8 @@ export class BridgeSessionManager {
     const bridgeContext = opts.bridgeContext || null;
     const promptSnapshot = this._buildOwnerPromptSnapshot(agent, homeCwd, bridgeContext);
     const state = {
-      bridgeReadOnly: prefs?.bridge?.readOnly === true,
+      bridgePermissionMode: normalizeBridgePermissionMode(prefs?.bridge || {}),
+      bridgeReadOnly: normalizeBridgePermissionMode(prefs?.bridge || {}) === SESSION_PERMISSION_MODES.READ_ONLY,
       experienceEnabled: agent.experienceEnabled === true,
       memoryMasterEnabled: agent.memoryMasterEnabled !== false,
       model: chatRef || null,
@@ -1135,10 +1136,7 @@ export class BridgeSessionManager {
    */
   _buildOwnerSessionOpts(agent, mm, homeCwd, sessionPathRef = { current: null }, targetModelRef = { current: null }, opts: any = {}) {
     const prefs = this._deps.getPreferences();
-    const bridgeReadOnly = prefs?.bridge?.readOnly === true;
-    const bridgePermissionMode = bridgeReadOnly
-      ? SESSION_PERMISSION_MODES.READ_ONLY
-      : SESSION_PERMISSION_MODES.OPERATE;
+    const bridgePermissionMode = normalizeBridgePermissionMode(prefs?.bridge || {});
     const agentToolsSnapshot = typeof agent.getToolsSnapshot === "function"
       ? agent.getToolsSnapshot({
         forceMemoryEnabled: agent.memoryMasterEnabled !== false,
@@ -1154,6 +1152,7 @@ export class BridgeSessionManager {
         agentDir: agent.agentDir,
         getSessionPath: () => sessionPathRef.current,
         getPermissionMode: () => bridgePermissionMode,
+        allowHumanApproval: false,
         bridgeContext: opts.bridgeContext || null,
       },
     );

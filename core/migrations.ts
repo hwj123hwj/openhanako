@@ -28,6 +28,7 @@ import { SubagentThreadStore } from "../lib/subagent-thread-store.ts";
 import { persistBrowserScreenshotFileSync } from "../lib/session-files/browser-screenshot-file.ts";
 import { getInvalidProviderModelIds } from "../shared/provider-model-validation.ts";
 import { normalizeThinkingLevelForModel } from "./session-thinking-level.ts";
+import { normalizeBridgePermissionMode, SESSION_PERMISSION_MODES } from "./session-permission-mode.ts";
 import { lookupKnown } from "../shared/known-models.ts";
 import { SESSION_PREFIX_MAP } from "../lib/bridge/session-key.ts";
 import { migrateLegacyApiKeyAuthToProviders } from "./provider-auth-migration.ts";
@@ -269,7 +270,7 @@ function cleanDanglingProviderRefs(ctx) {
  * preferences.json 中的 bridge.telegram / feishu / qq / wechat / whatsapp
  * 各自可能带 agentId 字段指定归属 agent。迁移后每个 platform config
  * 写入对应 agent 的 config.yaml，owner 信息一并合入。
- * bridge.readOnly / receiptEnabled 保留为全局偏好。
+ * bridge.permissionMode / readOnly / receiptEnabled 保留为全局偏好。
  */
 function migrateBridgeToPerAgent(ctx) {
   const { agentsDir, prefs, log } = ctx;
@@ -279,7 +280,12 @@ function migrateBridgeToPerAgent(ctx) {
 
   const primaryAgentId = preferences.primaryAgent || null;
   const ownerDict = bridge.owner || {};
-  const readOnly = bridge.readOnly === true;
+  const explicitPermissionMode = typeof bridge.permissionMode === "string"
+    ? normalizeBridgePermissionMode({ permissionMode: bridge.permissionMode })
+    : null;
+  const readOnly = explicitPermissionMode
+    ? explicitPermissionMode === SESSION_PERMISSION_MODES.READ_ONLY
+    : bridge.readOnly === true;
   const receiptEnabled = bridge.receiptEnabled === false ? false : undefined;
 
   const PLATFORMS = ["telegram", "feishu", "qq", "wechat", "whatsapp"];
@@ -354,6 +360,9 @@ function migrateBridgeToPerAgent(ctx) {
 
   // 清理旧的 platform / owner 键，只保留新的全局偏好键
   const nextBridgePrefs: any = {};
+  if (explicitPermissionMode && explicitPermissionMode !== SESSION_PERMISSION_MODES.AUTO) {
+    nextBridgePrefs.permissionMode = explicitPermissionMode;
+  }
   if (readOnly) nextBridgePrefs.readOnly = true;
   if (receiptEnabled === false) nextBridgePrefs.receiptEnabled = false;
   if (Object.keys(nextBridgePrefs).length > 0) preferences.bridge = nextBridgePrefs;

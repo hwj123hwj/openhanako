@@ -219,6 +219,34 @@ describe("session permission wrapper", () => {
     expect(result.details.executed).toBe(true);
   });
 
+  it("auto mode denies ask_user review results when human approval is disabled", async () => {
+    const tool = makeTool("write");
+    const confirmStore = {
+      create: vi.fn(),
+    };
+    const approvalGateway = {
+      review: vi.fn(async () => ({
+        action: "ask_user",
+        reviewer: "policy",
+        reason: "bridge cannot ask the user",
+        risk: "medium",
+      })),
+    };
+    const [wrapped] = wrapWithSessionPermission([tool], {
+      getPermissionMode: () => "auto",
+      getConfirmStore: () => confirmStore,
+      getApprovalGateway: () => approvalGateway,
+      allowHumanApproval: false,
+    });
+
+    const result = await wrapped.execute("call-1", { path: "notes.md" }, null, null, ctx);
+
+    expect(confirmStore.create).not.toHaveBeenCalled();
+    expect(tool.execute).not.toHaveBeenCalled();
+    expect(result.details.confirmation.status).toBe("ask_user");
+    expect(result.details.confirmation.reason).toBe("bridge cannot ask the user");
+  });
+
   // ---- 甲（Codex 式）端到端：permissionContext 透传到 classify ----
 
   it("subagent 上下文拦 subagent 工具（防自递归），即便 operate 全放行也拦，真实工具不执行", async () => {

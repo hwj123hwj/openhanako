@@ -6,6 +6,11 @@ export const SESSION_PERMISSION_MODES = Object.freeze({
 });
 
 export const DEFAULT_SESSION_PERMISSION_MODE = SESSION_PERMISSION_MODES.ASK;
+const BRIDGE_PERMISSION_MODE_VALUES = new Set([
+  SESSION_PERMISSION_MODES.AUTO,
+  SESSION_PERMISSION_MODES.OPERATE,
+  SESSION_PERMISSION_MODES.READ_ONLY,
+]);
 
 const INFORMATION_TOOLS = new Set([
   "read",
@@ -90,6 +95,13 @@ export function normalizeSessionPermissionMode(raw) {
   if (raw?.accessMode === "read_only") return SESSION_PERMISSION_MODES.READ_ONLY;
   if (raw?.planMode === true) return SESSION_PERMISSION_MODES.READ_ONLY;
   return DEFAULT_SESSION_PERMISSION_MODE;
+}
+
+export function normalizeBridgePermissionMode(raw) {
+  const source = typeof raw === "string" ? raw : raw?.permissionMode;
+  if (BRIDGE_PERMISSION_MODE_VALUES.has(source)) return source;
+  if (raw?.readOnly === true) return SESSION_PERMISSION_MODES.READ_ONLY;
+  return SESSION_PERMISSION_MODES.AUTO;
 }
 
 export function legacyAccessModeFromPermissionMode(mode) {

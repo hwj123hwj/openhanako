@@ -12,7 +12,11 @@ import {
   normalizeComputerUseSettings,
   revokeComputerUseApp,
 } from "./computer-use/settings.ts";
-import { normalizeSessionPermissionMode } from "./session-permission-mode.ts";
+import {
+  normalizeBridgePermissionMode,
+  normalizeSessionPermissionMode,
+  SESSION_PERMISSION_MODES,
+} from "./session-permission-mode.ts";
 import {
   mergeEditorTypography,
   normalizeEditorTypography,
@@ -220,17 +224,42 @@ export class PreferencesManager {
     this.savePreferences(prefs);
   }
 
+  /** 读取 bridge 权限模式（全局，默认自动审核） */
+  getBridgePermissionMode() {
+    return normalizeBridgePermissionMode(this._cache.bridge || {});
+  }
+
+  /** 保存 bridge 权限模式；保留 readOnly 旧字段供旧路径兼容 */
+  setBridgePermissionMode(mode) {
+    const normalized = normalizeBridgePermissionMode({ permissionMode: mode });
+    const prefs = this._mutableCopy();
+    const bridge = { ...(prefs.bridge || {}) };
+    bridge.permissionMode = normalized;
+    if (normalized === SESSION_PERMISSION_MODES.READ_ONLY) bridge.readOnly = true;
+    else delete bridge.readOnly;
+    prefs.bridge = bridge;
+    this.savePreferences(prefs);
+    return normalized;
+  }
+
   /** 读取 bridge 只读总开关（全局，默认关闭） */
   getBridgeReadOnly() {
-    return this._cache.bridge?.readOnly === true;
+    return this.getBridgePermissionMode() === SESSION_PERMISSION_MODES.READ_ONLY;
   }
 
   /** 保存 bridge 只读总开关 */
   setBridgeReadOnly(enabled) {
     const prefs = this._mutableCopy();
     const bridge = { ...(prefs.bridge || {}) };
-    if (enabled) bridge.readOnly = true;
-    else delete bridge.readOnly;
+    if (enabled) {
+      bridge.readOnly = true;
+      if (bridge.permissionMode) bridge.permissionMode = SESSION_PERMISSION_MODES.READ_ONLY;
+    } else {
+      delete bridge.readOnly;
+      if (bridge.permissionMode === SESSION_PERMISSION_MODES.READ_ONLY) {
+        bridge.permissionMode = SESSION_PERMISSION_MODES.AUTO;
+      }
+    }
     if (Object.keys(bridge).length === 0) delete prefs.bridge;
     else prefs.bridge = bridge;
     this.savePreferences(prefs);

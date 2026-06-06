@@ -23,6 +23,7 @@ import {
 } from "../../shared/secret-custody.ts";
 import { denySecretMutationWithoutScope, denyWithoutScope } from "../http/capability-guard.ts";
 import { recordSecurityAuditEvent } from "../http/security-audit.ts";
+import { normalizeBridgePermissionMode, SESSION_PERMISSION_MODES } from "../../core/session-permission-mode.ts";
 
 const MAX_BRIDGE_MEDIA_SIZE = 50 * 1024 * 1024;
 const FEISHU_TENANT_TOKEN_URL = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal";
@@ -151,6 +152,7 @@ export function createBridgeRoute(engine: any, bridgeManagerRef: any) {
         configured: !!bridge.wechat?.botToken,
         token: maskSecretValue(bridge.wechat?.botToken || ""),
       }),
+      permissionMode: engine.getBridgePermissionMode?.() || normalizeBridgePermissionMode({ readOnly: engine.getBridgeReadOnly() }),
       readOnly: engine.getBridgeReadOnly(),
       receiptEnabled: engine.getBridgeReceiptEnabled(),
       knownUsers: collectKnownUsers(index),
@@ -223,24 +225,36 @@ export function createBridgeRoute(engine: any, bridgeManagerRef: any) {
     return c.json({ ok: true });
   });
 
-  /** 更新 bridge 总设置（readOnly / receiptEnabled）— global preferences */
+  /** 更新 bridge 总设置（permissionMode / legacy readOnly / receiptEnabled）— global preferences */
   route.post("/bridge/settings", async (c) => {
     const body = await safeJson(c);
     const scopeDenied = denyWithoutScope(c, "bridge.manage");
     if (scopeDenied) return scopeDenied;
-    const { readOnly, receiptEnabled } = body;
-    if (typeof readOnly === "boolean") {
+    const { permissionMode, readOnly, receiptEnabled } = body;
+    if (typeof permissionMode === "string") {
+      const normalized = normalizeBridgePermissionMode({ permissionMode });
+      if (normalized !== permissionMode) {
+        return c.json({ ok: false, error: "invalid bridge permission mode" }, 400);
+      }
+      engine.setBridgePermissionMode?.(normalized);
+    } else if (typeof readOnly === "boolean") {
       engine.setBridgeReadOnly(readOnly);
+      engine.setBridgePermissionMode?.(
+        readOnly ? SESSION_PERMISSION_MODES.READ_ONLY : SESSION_PERMISSION_MODES.AUTO,
+      );
     }
     if (typeof receiptEnabled === "boolean") {
       engine.setBridgeReceiptEnabled(receiptEnabled);
     }
     debugLog()?.log(
       "api",
-      `POST /api/bridge/settings readOnly=${readOnly} receiptEnabled=${receiptEnabled}`,
+      `POST /api/bridge/settings permissionMode=${permissionMode} readOnly=${readOnly} receiptEnabled=${receiptEnabled}`,
     );
+    const savedPermissionMode = engine.getBridgePermissionMode?.()
+      || normalizeBridgePermissionMode({ readOnly: engine.getBridgeReadOnly() });
     return c.json({
       ok: true,
+      permissionMode: savedPermissionMode,
       readOnly: engine.getBridgeReadOnly(),
       receiptEnabled: engine.getBridgeReceiptEnabled(),
     });

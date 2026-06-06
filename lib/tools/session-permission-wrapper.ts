@@ -144,6 +144,19 @@ function resolveToolPermissionMode(deps: any, sessionPath: any) {
   return normalizeSessionPermissionMode(raw);
 }
 
+function toolApprovalUnavailable(toolName: any, status = "rejected", reason = "human approval disabled") {
+  return toolOk("Tool action was not approved.", {
+    action: toolName,
+    confirmed: false,
+    confirmation: {
+      kind: "tool_action_approval",
+      status,
+      toolName,
+      reason,
+    },
+  });
+}
+
 export function wrapWithSessionPermission(tools: any[] = [], deps: any = {}) {
   return tools.map((tool: any) => {
     if (!tool?.execute || tool._sessionPermissionWrapped) return tool;
@@ -186,8 +199,14 @@ export function wrapWithSessionPermission(tools: any[] = [], deps: any = {}) {
               },
             });
           }
+          if (deps.allowHumanApproval === false) {
+            return toolApprovalUnavailable(tool.name, "ask_user", review.reason || "human approval disabled");
+          }
         }
 
+        if (deps.allowHumanApproval === false) {
+          return toolApprovalUnavailable(tool.name);
+        }
         const approval = await askForToolApproval(tool.name, params, sessionPath, deps);
         if (!approval.allowed) {
           return toolOk("Tool action was not approved.", {

@@ -1099,7 +1099,7 @@ describe("BridgeSessionManager teardown", () => {
     expect(createAgentSessionMock.mock.calls[0][0].customTools.map((tool) => tool.name)).toContain("search_memory");
   });
 
-  it("owner bridge sessions derive permission mode from bridge read-only settings", async () => {
+  it("owner bridge sessions default to auto permission mode when bridge read-only is off", async () => {
     const agent = makeAgent(rootDir);
     const buildTools = vi.fn(() => ({
       tools: [],
@@ -1129,7 +1129,40 @@ describe("BridgeSessionManager teardown", () => {
 
     expect(buildTools).toHaveBeenCalledOnce();
     const buildOpts = buildTools.mock.calls[0][2];
-    expect(buildOpts.getPermissionMode()).toBe("operate");
+    expect(buildOpts.getPermissionMode()).toBe("auto");
+  });
+
+  it("owner bridge sessions honor explicit bridge auto permission mode", async () => {
+    const agent = makeAgent(rootDir);
+    const buildTools = vi.fn(() => ({
+      tools: [],
+      customTools: [],
+    }));
+    const deps = {
+      ...makeDeps(agent),
+      getPreferences: () => ({ thinking_level: "medium", bridge: { permissionMode: "auto", readOnly: true } }),
+      buildTools,
+    };
+    const mgrPath = path.join(agent.sessionDir, "bridge", "owner", "s-permission-auto.jsonl");
+    const manager = new BridgeSessionManager(deps);
+    sessionManagerCreateMock.mockReturnValue({ getSessionFile: () => mgrPath });
+
+    createAgentSessionMock.mockResolvedValue({
+      session: {
+        model: { input: ["text"] },
+        prompt: vi.fn(async () => {}),
+        subscribe: vi.fn(() => () => {}),
+        dispose: vi.fn(),
+        sessionManager: { getSessionFile: () => mgrPath },
+        extensionRunner: { hasHandlers: vi.fn(() => false) },
+      },
+    });
+
+    await manager.executeExternalMessage("hello", "bridge-k-permission-auto", null, { agentId: "agent-a" });
+
+    expect(buildTools).toHaveBeenCalledOnce();
+    const buildOpts = buildTools.mock.calls[0][2];
+    expect(buildOpts.getPermissionMode()).toBe("auto");
   });
 
   it("owner bridge tools expose the bridge session path instead of relying on desktop focus", async () => {
