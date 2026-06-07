@@ -128,6 +128,19 @@ describe("HTTP route security policy", () => {
       .toMatchObject({ allowed: true });
     expect(authorizeHttpRoute({ method: "POST", path: "/api/preferences/setup-complete", principal: settingsWriter }))
       .toMatchObject({ allowed: true });
+    expect(authorizeHttpRoute({ method: "PUT", path: "/api/user-profile", principal: settingsWriter }))
+      .toMatchObject({ allowed: true });
+    for (const [method, path] of [
+      ["POST", "/api/avatar/user"],
+      ["DELETE", "/api/avatar/user"],
+      ["POST", "/api/avatar/agent"],
+      ["DELETE", "/api/avatar/agent"],
+      ["POST", "/api/agents/hana/avatar"],
+      ["DELETE", "/api/agents/hana/avatar"],
+    ]) {
+      expect(authorizeHttpRoute({ method, path, principal: settingsWriter }), `${method} ${path}`)
+        .toMatchObject({ allowed: true });
+    }
     expect(authorizeHttpRoute({ method: "POST", path: "/api/providers/test", principal: providerManager }))
       .toMatchObject({ allowed: true });
     expect(authorizeHttpRoute({ method: "POST", path: "/api/providers/fetch-models", principal: providerManager }))
@@ -161,6 +174,36 @@ describe("HTTP route security policy", () => {
       requiredScope: "settings.read",
       policy: { kind: "scope", scope: "settings.read" },
     });
+  });
+
+  it("gates memory settings routes by settings scopes instead of studio-owner fallback", async () => {
+    const { authorizeHttpRoute } = await import("../server/http/route-security.ts");
+    const reader = devicePrincipal(["settings.read"]);
+    const writer = devicePrincipal(["settings.write"]);
+    const chatOnly = devicePrincipal(["chat"]);
+
+    for (const [method, path] of [
+      ["GET", "/api/memories"],
+      ["GET", "/api/memories/health"],
+      ["GET", "/api/memories/compiled"],
+      ["GET", "/api/memories/export"],
+    ]) {
+      expect(authorizeHttpRoute({ method, path, principal: reader }), `${method} ${path}`)
+        .toMatchObject({ allowed: true });
+      expect(authorizeHttpRoute({ method, path, principal: chatOnly }), `${method} ${path}`)
+        .toMatchObject({ allowed: false, error: "insufficient_scope", requiredScope: "settings.read" });
+    }
+
+    for (const [method, path] of [
+      ["DELETE", "/api/memories"],
+      ["DELETE", "/api/memories/compiled"],
+      ["POST", "/api/memories/import"],
+    ]) {
+      expect(authorizeHttpRoute({ method, path, principal: writer }), `${method} ${path}`)
+        .toMatchObject({ allowed: true });
+      expect(authorizeHttpRoute({ method, path, principal: reader }), `${method} ${path}`)
+        .toMatchObject({ allowed: false, error: "insufficient_scope", requiredScope: "settings.write" });
+    }
   });
 
   it("allows scoped device access to chat identity and resources without opening admin APIs", async () => {

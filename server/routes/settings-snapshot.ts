@@ -18,6 +18,7 @@ import { normalizeBridgePermissionMode } from "../../core/session-permission-mod
 import { agentExists, validateId } from "../utils/validation.ts";
 import { readAuthPrincipal } from "../http/capability-guard.ts";
 import { isLocalOwnerPrincipal } from "../http/route-security.ts";
+import { readUserProfile } from "../../lib/user-profile-store.ts";
 
 function agentDir(engine: any, id: string) {
   return path.join(engine.agentsDir, id);
@@ -217,7 +218,7 @@ export function createSettingsSnapshotRoute(engine: any, options: Record<string,
         identity,
         ishiki,
         publicIshiki,
-        userProfile: await readTextFile(path.join(engine.userDir, "profile.md")),
+        userProfile: await readUserProfile(engine.userDir),
         experience: readExperience(engine, agentId, config),
         pinned: { pins: readPinned(baseDir) },
         globalModels: buildGlobalModels(engine),

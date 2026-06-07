@@ -104,7 +104,7 @@ async function makeEngine() {
   await writeFile(path.join(agentDir, "ishiki.md"), "ishiki");
   await writeFile(path.join(agentDir, "public-ishiki.md"), "public");
   await writeFile(path.join(agentDir, "pinned.md"), "keep this");
-  await writeFile(path.join(userDir, "profile.md"), "user profile");
+  await writeFile(path.join(userDir, "user.md"), "user profile");
 
   return {
     hanakoHome: tmpRoot,

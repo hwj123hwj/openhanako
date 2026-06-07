@@ -63,13 +63,9 @@ export function classifyHttpRoute({ method = "GET", path = "" } = {}) {
   if (routePath === "/api/mobile/bootstrap") {
     return verb === "GET" ? scoped("chat") : LOCAL_ONLY;
   }
-  if (
-    routePath === "/api/avatar/agent"
-    || routePath === "/api/avatar/user"
-    || /^\/api\/agents\/[^/]+\/avatar$/.test(routePath)
-  ) {
-    return verb === "GET" ? scoped("chat") : LOCAL_ONLY;
-  }
+  if (isAvatarReadRoute(verb, routePath)) return scoped("chat");
+  if (isAvatarWriteRoute(verb, routePath)) return scoped("settings.write");
+  if (isAvatarRoutePath(routePath)) return LOCAL_ONLY;
   if (isWorkbenchFileReadRoute(verb, routePath)) return scoped("files.read");
   if (isWorkbenchFileWriteRoute(verb, routePath)) return scoped("files.write");
   if (isStudioWorkspaceReadRoute(verb, routePath)) return scoped("files.read");
@@ -198,6 +194,20 @@ function normalizePath(path) {
   }
 }
 
+function isAvatarRoutePath(routePath) {
+  return routePath === "/api/avatar/agent"
+    || routePath === "/api/avatar/user"
+    || /^\/api\/agents\/[^/]+\/avatar$/.test(routePath);
+}
+
+function isAvatarReadRoute(verb, routePath) {
+  return (verb === "GET" || verb === "HEAD") && isAvatarRoutePath(routePath);
+}
+
+function isAvatarWriteRoute(verb, routePath) {
+  return (verb === "POST" || verb === "DELETE") && isAvatarRoutePath(routePath);
+}
+
 export function scopeAllows(scopes, required) {
   if (!required) return true;
   if (scopes.includes(required)) return true;
@@ -272,6 +282,10 @@ function isSettingsReadRoute(verb, routePath) {
     || routePath === "/api/bridge/status"
     || routePath === "/api/agents"
     || routePath === "/api/user-profile"
+    || routePath === "/api/memories"
+    || routePath === "/api/memories/health"
+    || routePath === "/api/memories/compiled"
+    || routePath === "/api/memories/export"
     || routePath === "/api/preferences/notifications"
     || routePath === "/api/preferences/computer-use"
     || /^\/api\/agents\/[^/]+\/(?:identity|ishiki|public-ishiki|pinned|experience)$/.test(routePath)
@@ -333,6 +347,7 @@ function isSettingsWriteRoute(verb, routePath) {
   if (verb === "DELETE" && routePath === "/api/experiments/memory/cache-snapshot-reflection/observation") return true;
   return (verb === "PUT" && (
     routePath === "/api/config"
+    || routePath === "/api/user-profile"
     || routePath === "/api/preferences/models"
     || routePath === "/api/preferences/appearance"
     || routePath === "/api/preferences/quick-chat"
@@ -341,7 +356,12 @@ function isSettingsWriteRoute(verb, routePath) {
     || routePath === "/api/speech-recognition/config"
     || /^\/api\/agents\/[^/]+\/(?:identity|ishiki|public-ishiki|pinned|experience)$/.test(routePath)
     || /^\/api\/agents\/[^/]+\/config$/.test(routePath)
-  ));
+  ))
+    || (verb === "DELETE" && (
+      routePath === "/api/memories"
+      || routePath === "/api/memories/compiled"
+    ))
+    || (verb === "POST" && routePath === "/api/memories/import");
 }
 
 function isSkillSettingsReadRoute(verb, routePath) {

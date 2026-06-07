@@ -54,6 +54,7 @@ import {
   PROACTIVE_SUBAGENT_EXPERIMENT_ID,
   getResolvedExperimentValue,
 } from "../lib/experiments/registry.ts";
+import { userProfilePath } from "../lib/user-profile-store.ts";
 
 const moduleLog = createModuleLogger("agent");
 
@@ -1050,7 +1051,7 @@ export class Agent {
       agentName: this.agentName,
       userName: this.userName,
       identityAndPersonality: this.personality.trim(),
-      userProfile: readFile(path.join(this.userDir, "user.md")).trim(),
+      userProfile: readFile(userProfilePath(this.userDir)).trim(),
       existingMemory,
       roster: this._formatTeamRoster(isZh, { includeSelf: false }),
     };
@@ -1086,7 +1087,7 @@ export class Agent {
     const ishiki = this.personality;
 
     // 可选文件
-    const userMd = readFile(path.join(this.userDir, "user.md"));
+    const userMd = readFile(userProfilePath(this.userDir));
     const pinnedMd = readFile(path.join(this.agentDir, "pinned.md"));
     const memory = readFile(this.memoryMdPath);
 
