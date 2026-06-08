@@ -43,20 +43,36 @@ describe("DeferredResultCoordinator", () => {
     expect(store.query("task-1")).toMatchObject({ delivered: true });
   });
 
-  it("records UI-only media results as non-context custom entries without waking the parent agent", async () => {
-    const sessionFile = {
-      fileId: "sf_img",
-      filePath: "/cache/generated.png",
-      mime: "image/png",
-      kind: "image",
-    };
+  it("silently marks delivered for UI-only tasks without interlude (no record, no agent notification)", async () => {
     store.defer("task-img", "/sessions/a.jsonl", {
       type: "image-generation",
       mediaKind: "image",
       deliveryIntent: "ui_only",
       prompt: "moon",
     });
-    store.resolve("task-img", { sessionFiles: [sessionFile] });
+    store.resolve("task-img", { sessionFiles: [{ fileId: "sf_img" }] });
+
+    await vi.waitFor(() => {
+      expect(store.query("task-img")).toMatchObject({ delivered: true });
+    });
+
+    expect(sessionCoordinator.deliverCustomMessage).not.toHaveBeenCalled();
+    expect(sessionCoordinator.recordCustomEntry).not.toHaveBeenCalled();
+  });
+
+  it("records UI-only results as custom entries when interlude is opted in", async () => {
+    const sessionFile = {
+      fileId: "sf_img",
+      filePath: "/cache/generated.png",
+      mime: "image/png",
+      kind: "image",
+    };
+    store.defer("task-ui", "/sessions/a.jsonl", {
+      type: "subagent",
+      interlude: true,
+      deliveryIntent: "ui_only",
+    });
+    store.resolve("task-ui", { sessionFiles: [sessionFile] });
 
     await vi.waitFor(() => {
       expect(sessionCoordinator.recordCustomEntry).toHaveBeenCalledOnce();
@@ -68,13 +84,13 @@ describe("DeferredResultCoordinator", () => {
       "hana-deferred-result",
       expect.objectContaining({
         schemaVersion: 1,
-        taskId: "task-img",
+        taskId: "task-ui",
         status: "success",
-        type: "image-generation",
+        type: "subagent",
         result: { sessionFiles: [sessionFile] },
       }),
     );
-    expect(store.query("task-img")).toMatchObject({ delivered: true });
+    expect(store.query("task-ui")).toMatchObject({ delivered: true });
   });
 
   it("wakes the parent agent when a UI-only image generation task fails with failure notification enabled", async () => {

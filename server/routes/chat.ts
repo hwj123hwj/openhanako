@@ -400,7 +400,7 @@ export function createChatRoute(engine: any, hub: any, { upgradeWebSocket }: any
 
   function buildDeferredResultContentEvents(sessionPath, event) {
     const events = [];
-    if (!event.meta?.suppressInterlude) {
+    if (event.meta?.interlude) {
       const interlude = buildDeferredResultInterludeBlock(event, {
         receiverName: resolveDeferredReceiverName(engine, sessionPath),
       });

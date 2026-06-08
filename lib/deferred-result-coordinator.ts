@@ -136,7 +136,7 @@ export class DeferredResultCoordinator {
   }
 
   async _recordUiOnlyTask(taskId, task) {
-    if (task?.meta?.suppressInterlude) {
+    if (!task?.meta?.interlude) {
       this.store.markDelivered(taskId);
       return true;
     }
