@@ -216,6 +216,11 @@ export interface StudioWorkspace {
   presentation?: string | null;
   capabilities?: string[];
   isDefault?: boolean;
+  /**
+   * local_fs mount 的 native 绝对根路径。仅当服务端按 principal 判定为
+   * 本地 owner 时披露；远端/虚拟 mount 恒为 null。
+   */
+  nativeRootPath?: string | null;
 }
 
 export interface WorkspaceChangePayload {
