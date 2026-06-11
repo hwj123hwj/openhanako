@@ -87,6 +87,18 @@ describe("image generation retry", () => {
     });
   });
 
+  it("passes multiple reference images to adapters through the existing image parameter", () => {
+    expect(buildImageParams({
+      prompt: "combine the references",
+      image: "/tmp/old.png",
+      referenceImages: ["/tmp/a.png", "", "/tmp/b.png"],
+    })).toMatchObject({
+      type: "image",
+      prompt: "combine the references",
+      image: ["/tmp/a.png", "/tmp/b.png"],
+    });
+  });
+
   it("reopens a failed image task with the same parameters and taskId", async () => {
     const task = makeFailedTask();
     const { ctx, adapter, store, poller, bus } = makeCtx(task);

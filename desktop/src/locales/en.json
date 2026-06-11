@@ -2786,6 +2786,7 @@
       "promptDesc": "Image description (Chinese or English)",
       "countDesc": "Number of concurrent generations, default 1, max 9",
       "imageDesc": "Reference image path (image-to-image)",
+      "referenceImagesDesc": "Array of reference image paths. Use this for multiple references; single-image calls can keep using image.",
       "ratioDesc": "Aspect ratio: 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 21:9",
       "resolutionDesc": "Unified resolution tier: 1k, 2k, 4k; adapter maps to the closest vendor size",
       "qualityDesc": "Quality tier: low, medium, high, auto (adapter maps to vendor parameters)",

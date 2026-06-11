@@ -46,6 +46,10 @@ export function bridgeDeliveryTarget(ctx) {
 }
 
 export function buildImageParams(input) {
+  const referenceImages = Array.isArray(input.referenceImages)
+    ? input.referenceImages.filter((item) => typeof item === "string" && item.trim())
+    : [];
+  const image = referenceImages.length > 0 ? referenceImages : input.image;
   return {
     type: "image",
     prompt: input.prompt,
@@ -55,7 +59,7 @@ export function buildImageParams(input) {
     ...(input.resolution && { resolution: input.resolution }),
     ...(input.quality && { quality: input.quality }),
     ...(input.model && { model: input.model }),
-    ...(input.image && { image: input.image }),
+    ...(image && { image }),
   };
 }
 
