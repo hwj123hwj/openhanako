@@ -189,7 +189,9 @@ const { text } = await sampleText(ctx, {
 });
 ```
 
-Media helpers expose Hana's configured provider stack. `listMediaProviders()` and `resolveMediaModel()` read configured image/video/speech-capable providers. `generateImage()` submits an image generation task through the built-in media task pipeline and returns a task/batch result; by default generated files are delivered as `SessionFile` resources when the task completes. Use `referenceImages` with `SessionFile` references for multi-reference image generation. Image adapters accept multiple reference images by default; adapters that only support one reference should declare `maxReferenceImages: 1`, and the task pipeline will reject larger requests before enqueueing. `generateVideo()`, `generateMedia()`, and `transcribeAudio()` use the same native media manager for video tasks and ASR. `transcribeAudio()` returns `{ ok: true, transcription }`.
+Media helpers expose Hana's configured provider stack. `listMediaProviders()` and `resolveMediaModel()` read configured image/video/speech-capable providers. `generateImage()` submits an image generation task through the built-in media task pipeline and returns a task/batch result; by default generated files are delivered as `SessionFile` resources when the task completes. Use `referenceImages` with `SessionFile` references for multi-reference image generation. Image/video adapters must declare reference-image support on the selected model mode with `modes[].inputLimits.referenceImages`, for example `{ min: 1, max: 1 }` for single-image-to-video or `{ min: 0, max: 0 }` for text-only generation. The task pipeline rejects unsupported reference images before enqueueing. `generateVideo()`, `generateMedia()`, and `transcribeAudio()` use the same native media manager for video tasks and ASR. `transcribeAudio()` returns `{ ok: true, transcription }`.
+
+Image/video helpers keep a stable top-level shape. Provider-specific controls go through `options`. Parameter support belongs to the model and usually to the mode, not to the provider as a whole: use `models[].modes[].parameterSchema`, `modes[].defaults`, `modes[].inputLimits`, `modes[].pricing`, and `modes[].agentHints` so settings UI, Agent discovery, and runtime validation all read the same contract.
 
 ```js
 const result = await generateImage(ctx, {
@@ -277,6 +279,17 @@ const provider = defineProvider({
           protocolId: 'local-cli-media',
           inputs: ['text'],
           outputs: ['image'],
+          modes: [{
+            id: 'text2image',
+            label: 'Text to image',
+            inputLimits: { referenceImages: { min: 0, max: 0 } },
+            parameterSchema: {
+              type: 'object',
+              properties: {
+                ratio: { type: 'string', enum: ['1:1', '16:9', '9:16'], default: '1:1' },
+              },
+            },
+          }],
         }],
       },
     },

@@ -16,6 +16,7 @@ import {
   normalizeMediaDelivery,
   retryImageTask,
 } from "../../plugins/image-gen/lib/image-task-runner.ts";
+import { resolveMediaParameters } from "./media-parameters.ts";
 import { volcengineImageAdapter } from "../../plugins/image-gen/adapters/volcengine.ts";
 import { openaiImageAdapter } from "../../plugins/image-gen/adapters/openai.ts";
 import { openaiCodexImageAdapter } from "../../plugins/image-gen/adapters/openai-codex.ts";
@@ -212,6 +213,19 @@ function resolveImageReference(reference, {
 
 function normalizeMediaKind(payload) {
   return textOrNull(payload?.kind) || textOrNull(payload?.type) || textOrNull(payload?.mediaKind) || "image";
+}
+
+function projectMediaProviderModel(model, adapterAvailable) {
+  const name = model.displayName || model.name || model.id;
+  return {
+    ...model,
+    id: model.id,
+    name,
+    displayName: name,
+    protocolId: model.protocolId,
+    credentialLaneId: model.credentialLaneId,
+    adapterAvailable,
+  };
 }
 
 export class UniversalMediaManager {
@@ -640,18 +654,23 @@ export class UniversalMediaManager {
     const target = this._resolveVideoTarget(input);
     const adapter = target?.adapter || null;
     if (!adapter) throw new Error(t("toolDef.generateVideo.noProvider"));
+    const providerDefaults = this.getVideoConfig()?.providerDefaults?.[target.providerId] || {};
+    const parameterResolution = resolveMediaParameters({
+      kind: "video",
+      input,
+      providerId: target.providerId,
+      model: target.model,
+      providerDefaults,
+    });
 
     const batchId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const params = {
       type: "video",
       prompt: input.prompt,
+      ...parameterResolution.resolvedParameters,
       ...(input.image && { image: input.image }),
-      ...(input.duration && { duration: input.duration }),
-      ...(input.ratio && { ratio: input.ratio }),
-      ...(input.frameRate && { frameRate: input.frameRate }),
-      ...(input.frame_rate && { frame_rate: input.frame_rate }),
-      ...(input.numFrames && { numFrames: input.numFrames }),
-      ...(input.num_frames && { num_frames: input.num_frames }),
+      mode: parameterResolution.modeId,
+      resolvedParameters: parameterResolution.resolvedParameters,
       ...(target?.providerId ? { providerId: target.providerId } : {}),
       ...(target?.modelId ? { modelId: target.modelId, model: target.modelId } : (input.model ? { model: input.model } : {})),
       ...(target?.protocolId ? { protocolId: target.protocolId } : {}),
@@ -729,6 +748,7 @@ export class UniversalMediaManager {
             adapter: legacyAdapter,
             providerId,
             modelId,
+            model: null,
             protocolId: legacyAdapter.protocolId || null,
             credentialLaneId: null,
             credentialProviderId: providerId,
@@ -751,6 +771,7 @@ export class UniversalMediaManager {
           adapter,
           providerId,
           modelId: null,
+          model: null,
           protocolId: adapter.protocolId || null,
           credentialLaneId: null,
           credentialProviderId: providerId,
@@ -792,6 +813,7 @@ export class UniversalMediaManager {
       adapter,
       providerId: adapter.id || null,
       modelId: null,
+      model: null,
       protocolId: adapter.protocolId || null,
       credentialLaneId: null,
       credentialProviderId: adapter.id || null,
@@ -824,6 +846,7 @@ export class UniversalMediaManager {
       adapter,
       providerId: resolved.providerId,
       modelId: resolved.model.id,
+      model: resolved.model,
       protocolId,
       credentialLaneId: resolved.credentialLane?.id || null,
       credentialProviderId: resolved.credentialLane?.providerId || resolved.providerId,
@@ -908,14 +931,10 @@ export class UniversalMediaManager {
     for (const provider of this._providers.getMediaProviders(IMAGE_CAPABILITY) || []) {
       const credentialStatus = this._providers.getMediaProviderCredentialStatus?.(provider.providerId, IMAGE_CAPABILITY) || {};
       const models = (provider.models || [])
-        .map((model) => ({
-          id: model.id,
-          name: model.displayName || model.name || model.id,
-          displayName: model.displayName || model.name || model.id,
-          protocolId: model.protocolId,
-          credentialLaneId: model.credentialLaneId,
-          adapterAvailable: this.hasAdapterForImageModel(provider.providerId, model),
-        }))
+        .map((model) => projectMediaProviderModel(
+          model,
+          this.hasAdapterForImageModel(provider.providerId, model),
+        ))
         .filter((model) => {
           if (model.adapterAvailable) return true;
           this._log.warn(
@@ -958,14 +977,10 @@ export class UniversalMediaManager {
     for (const provider of this._providers.getMediaProviders(VIDEO_CAPABILITY) || []) {
       const credentialStatus = this._providers.getMediaProviderCredentialStatus?.(provider.providerId, VIDEO_CAPABILITY) || {};
       const models = (provider.models || [])
-        .map((model) => ({
-          id: model.id,
-          name: model.displayName || model.name || model.id,
-          displayName: model.displayName || model.name || model.id,
-          protocolId: model.protocolId,
-          credentialLaneId: model.credentialLaneId,
-          adapterAvailable: this.hasAdapterForVideoModel(provider.providerId, model),
-        }))
+        .map((model) => projectMediaProviderModel(
+          model,
+          this.hasAdapterForVideoModel(provider.providerId, model),
+        ))
         .filter((model) => {
           if (model.adapterAvailable) return true;
           this._log.warn(
