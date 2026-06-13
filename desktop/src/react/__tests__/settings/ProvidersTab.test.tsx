@@ -198,4 +198,54 @@ describe('ProvidersTab provider-scoped form state', () => {
     });
     expect(screen.getByDisplayValue('https://api.baichuan-ai.com/v1')).toBeInTheDocument();
   });
+
+  it('saves registry-only non-preset providers through the initial setup payload', async () => {
+    const registryOnlySummary = {
+      agnes: providerSummary({
+        display_name: 'Agnes',
+        base_url: 'https://apihub.agnes-ai.com/v1',
+        api: 'openai-completions',
+        models: [],
+        has_credentials: false,
+        can_delete: false,
+        config_status: 'needs_setup',
+        is_configured: false,
+      }),
+    };
+
+    mocks.hanaFetch.mockImplementation((path: string) => {
+      if (path === '/api/providers/summary') {
+        return Promise.resolve(jsonResponse({ providers: registryOnlySummary }));
+      }
+      return Promise.resolve(jsonResponse({ ok: true }));
+    });
+    useSettingsStore.setState({
+      providersSummary: registryOnlySummary,
+      selectedProviderId: 'agnes',
+      settingsConfig: { providers: {} },
+    });
+
+    const { container } = render(<ProvidersTab />);
+
+    const input = await waitFor(() => container.querySelector('input[type="password"]') as HTMLInputElement);
+    fireEvent.change(input, { target: { value: 'agnes-key' } });
+    const saveButton = container.querySelector('button[title="settings.providers.verifyConnection"]') as HTMLButtonElement;
+    fireEvent.click(saveButton);
+
+    await waitFor(() => expect(mocks.hanaFetch).toHaveBeenCalledWith(
+      '/api/config',
+      expect.objectContaining({ method: 'PUT' }),
+    ));
+    const configCall = mocks.hanaFetch.mock.calls.find(([path]) => path === '/api/config');
+    expect(JSON.parse(String((configCall?.[1] as RequestInit).body))).toEqual({
+      providers: {
+        agnes: {
+          base_url: 'https://apihub.agnes-ai.com/v1',
+          api_key: 'agnes-key',
+          api: 'openai-completions',
+          seed_default_models: true,
+        },
+      },
+    });
+  });
 });

@@ -158,8 +158,14 @@ export function ProvidersTab() {
                   providerId={selected}
                   summary={summary}
                   providerConfig={providers[selected]}
-                  isPresetSetup={(!existing || isRegistryOnlySetup) && !!preset}
-                  presetInfo={preset}
+                  isPresetSetup={!existing || isRegistryOnlySetup}
+                  presetInfo={preset || (isRegistryOnlySetup ? {
+                    label: summary.display_name || selected,
+                    value: selected,
+                    url: summary.base_url,
+                    api: summary.api,
+                    local: summary.auth_type === 'none',
+                  } : undefined)}
                   onRefresh={async () => { await loadSettingsConfig(); await loadSummary(); }}
                 />
               );
