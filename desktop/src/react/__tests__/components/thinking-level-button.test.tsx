@@ -119,13 +119,13 @@ describe('ThinkingLevelButton', () => {
     }));
   });
 
-  it('uses the shared select option checkmark for the selected thinking level', () => {
+  it('does not render a trailing checkmark for the selected thinking level', () => {
     const { container } = render(<ThinkingLevelButton level="high" onChange={vi.fn()} availableLevels={['off', 'medium', 'high', 'max']} />);
 
     fireEvent.click(container.querySelector('button') as HTMLButtonElement);
 
     const selected = optionForText('深度');
     expect(selected.getAttribute('aria-selected')).toBe('true');
-    expect(selected.querySelector('[data-select-check]')).toBeTruthy();
+    expect(selected.querySelector('[data-select-check]')).toBeNull();
   });
 });
