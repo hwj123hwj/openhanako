@@ -51,6 +51,8 @@ type MediaModel = {
   name: string;
   displayName?: string;
   protocolId?: string;
+  ratios?: string[];
+  resolutions?: string[];
   modes?: MediaMode[];
 };
 
@@ -99,6 +101,8 @@ export function MediaProviderDetail({ providerId, provider, capability = 'imageG
   const schemaProperties = defaultsMode?.parameterSchema?.properties || {};
   const schemaEntries = Object.entries(schemaProperties);
   const schemaDrivenDefaults = schemaEntries.length > 0;
+  const fallbackRatios = Array.isArray(defaultsModel?.ratios) ? defaultsModel.ratios : [];
+  const fallbackResolutions = Array.isArray(defaultsModel?.resolutions) ? defaultsModel.resolutions : [];
   const savedModeDefaults = defaultsModel && defaultsMode
     ? modeDefaultsForProvider(defaults, defaultsModel.id, defaultsMode.id)
     : {};
@@ -395,41 +399,36 @@ export function MediaProviderDetail({ providerId, provider, capability = 'imageG
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              {capability === 'imageGeneration' && (
+              {capability === 'imageGeneration' && fallbackResolutions.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                     {t('settings.media.size')}
                   </span>
                   <SelectWidget
-                    value={defaults.size || ''}
-                    onChange={(v) => updateDefault('size', v || undefined)}
+                    value={defaults.resolution || ''}
+                    onChange={(v) => updateDefault('resolution', v || undefined)}
                     options={[
-                      { value: '2K', label: '2K' },
-                      { value: '4K', label: '4K' },
+                      { value: '', label: t('settings.media.defaultOption') },
+                      ...fallbackResolutions.map(item => ({ value: String(item), label: String(item) })),
                     ]}
                   />
                 </div>
               )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  {t('settings.media.aspectRatio')}
-                </span>
-                <SelectWidget
-                  value={defaults.aspect_ratio || ''}
-                  onChange={(v) => updateDefault('aspect_ratio', v || undefined)}
-                  options={[
-                    { value: '',     label: t('settings.media.defaultOption') },
-                    { value: '1:1',  label: '1:1' },
-                    { value: '4:3',  label: '4:3' },
-                    { value: '3:4',  label: '3:4' },
-                    { value: '16:9', label: '16:9' },
-                    { value: '9:16', label: '9:16' },
-                    { value: '3:2',  label: '3:2' },
-                    { value: '2:3',  label: '2:3' },
-                    { value: '21:9', label: '21:9' },
-                  ]}
-                />
-              </div>
+              {fallbackRatios.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    {t('settings.media.aspectRatio')}
+                  </span>
+                  <SelectWidget
+                    value={defaults.aspect_ratio || ''}
+                    onChange={(v) => updateDefault('aspect_ratio', v || undefined)}
+                    options={[
+                      { value: '', label: t('settings.media.defaultOption') },
+                      ...fallbackRatios.map(item => ({ value: String(item), label: String(item) })),
+                    ]}
+                  />
+                </div>
+              )}
               {capability === 'videoGeneration' ? (
                 <>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -463,40 +462,7 @@ export function MediaProviderDetail({ providerId, provider, capability = 'imageG
                     />
                   </div>
                 </>
-              ) : (
-                <>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    {t('settings.media.format')}
-                  </span>
-                  <SelectWidget
-                    value={defaults.format || ''}
-                    onChange={(v) => updateDefault('format', v || undefined)}
-                    options={[
-                      { value: '',     label: t('settings.media.defaultOption') },
-                      { value: 'png',  label: 'PNG' },
-                      { value: 'jpeg', label: 'JPEG' },
-                      { value: 'webp', label: 'WebP' },
-                    ]}
-                  />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    {t('settings.media.quality')}
-                  </span>
-                  <SelectWidget
-                    value={defaults.quality || ''}
-                    onChange={(v) => updateDefault('quality', v || undefined)}
-                    options={[
-                      { value: '',       label: t('settings.media.defaultOption') },
-                      { value: 'low',    label: t('settings.media.qualityLow') },
-                      { value: 'medium', label: t('settings.media.qualityMedium') },
-                      { value: 'high',   label: t('settings.media.qualityHigh') },
-                    ]}
-                  />
-                </div>
-                </>
-              )}
+              ) : null}
             </div>
           )}
         </div>

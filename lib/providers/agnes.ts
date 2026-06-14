@@ -15,16 +15,15 @@ import {
   noReferenceImages,
   numberParam,
   referenceImages,
-  stringParam,
 } from "./media-schema-helpers.ts";
 
 const AGNES_IMAGE_RATIOS = ["1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16", "21:9"];
 
 const AGNES_IMAGE_PROPERTIES = {
-  ratio: enumParam(AGNES_IMAGE_RATIOS, "1:1"),
-  size: stringParam(),
-  resolution: enumParam(["1k"], "1k"),
+  ratio: enumParam(AGNES_IMAGE_RATIOS, "3:2"),
+  resolution: enumParam(["1K"], "1K"),
 };
+const AGNES_IMAGE_DEFAULTS = { ratio: "3:2", resolution: "1K" };
 
 const AGNES_VIDEO_PROPERTIES = {
   ratio: enumParam(COMMON_IMAGE_RATIOS, "16:9"),
@@ -55,11 +54,11 @@ export const agnesPlugin = {
             outputs: ["image"],
             supportsEdit: true,
             modes: [
-              mediaMode("text2image", "Text to image", AGNES_IMAGE_PROPERTIES, {}, noReferenceImages()),
-              mediaMode("image2image", "Image edit/reference", AGNES_IMAGE_PROPERTIES, {}, referenceImages()),
+              mediaMode("text2image", "Text to image", AGNES_IMAGE_PROPERTIES, AGNES_IMAGE_DEFAULTS, noReferenceImages()),
+              mediaMode("image2image", "Image edit/reference", AGNES_IMAGE_PROPERTIES, AGNES_IMAGE_DEFAULTS, referenceImages()),
             ],
             ratios: AGNES_IMAGE_RATIOS,
-            resolutions: ["1k"],
+            resolutions: ["1K"],
           },
         ],
       },

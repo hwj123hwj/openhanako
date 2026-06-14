@@ -140,6 +140,51 @@ describe("Jimeng CLI adapters", () => {
     ], expect.objectContaining({ shell: false }));
   });
 
+  it("uses the highest supported Jimeng image defaults when no explicit defaults are saved", async () => {
+    const run = vi.fn(async () => ({
+      stdout: JSON.stringify({ submit_id: "img-task", gen_status: "querying" }),
+      stderr: "",
+    }));
+    const adapter = createJimengImageAdapter({
+      resolveCommand: () => "/usr/local/bin/dreamina",
+      runCommand: run,
+    });
+
+    await adapter.submit({
+      prompt: "一只猫",
+      model: "jimeng-image-5.0",
+    }, { generatedDir: "/tmp/out" } as any);
+
+    expect(run).toHaveBeenCalledWith("/usr/local/bin/dreamina", [
+      "text2image",
+      "--prompt",
+      "一只猫",
+      "--model_version",
+      "5.0",
+      "--ratio",
+      "3:2",
+      "--resolution_type",
+      "4k",
+      "--poll",
+      "0",
+    ], expect.objectContaining({ shell: false }));
+  });
+
+  it("rejects unsupported Jimeng image resolution before invoking dreamina", async () => {
+    const run = vi.fn();
+    const adapter = createJimengImageAdapter({
+      resolveCommand: () => "/usr/local/bin/dreamina",
+      runCommand: run,
+    });
+
+    await expect(adapter.submit({
+      prompt: "一只猫",
+      model: "jimeng-image-5.0",
+      resolution: "1k",
+    }, { generatedDir: "/tmp/out" } as any)).rejects.toThrow(/Jimeng.*resolution.*1k/i);
+    expect(run).not.toHaveBeenCalled();
+  });
+
   it("submits image-to-video when a reference image is present", async () => {
     const run = vi.fn(async () => ({
       stdout: "submit_id: vid-task\ngen_status: querying",

@@ -23,11 +23,11 @@ function imageMode(id, label, inputLimits) {
     parameterSchema: {
       type: "object",
       properties: {
-        ratio: { type: "string", enum: IMAGE_RATIOS, default: "1:1" },
-        resolution: { type: "string", enum: ["2k", "4k"], default: "2k" },
+        ratio: { type: "string", enum: IMAGE_RATIOS, default: "3:2" },
+        resolution: { type: "string", enum: ["2k", "4k"], default: "4k" },
       },
     },
-    defaults: { resolution: "2k" },
+    defaults: { ratio: "3:2", resolution: "4k" },
     inputLimits,
   };
 }

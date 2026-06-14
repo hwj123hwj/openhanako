@@ -43,8 +43,19 @@ describe("Jimeng CLI provider contribution", () => {
             }),
           }),
         ]),
+        resolutions: ["2k", "4k"],
       }),
     ]);
+    const imageMode = registry.getMediaModels("jimeng-cli", "image_generation")[0].modes[0];
+    expect(imageMode.parameterSchema.properties.ratio).toMatchObject({
+      enum: ["21:9", "16:9", "3:2", "4:3", "1:1", "3:4", "2:3", "9:16"],
+      default: "3:2",
+    });
+    expect(imageMode.parameterSchema.properties.resolution).toMatchObject({
+      enum: ["2k", "4k"],
+      default: "4k",
+    });
+    expect(imageMode.defaults).toMatchObject({ ratio: "3:2", resolution: "4k" });
     const videoModels = registry.getMediaModels("jimeng-cli", "video_generation");
     expect(videoModels).toEqual(expect.arrayContaining([
       expect.objectContaining({

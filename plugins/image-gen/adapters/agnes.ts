@@ -60,9 +60,26 @@ async function getCredentials(ctx, params: any = {}) {
 
 function resolveImageSize(params, providerDefaults: any = {}) {
   const explicit = params.size || params.resolution || providerDefaults.size || providerDefaults.resolution;
-  if (typeof explicit === "string" && /^\d+x\d+$/i.test(explicit.trim())) return explicit.trim();
   const ratio = params.aspect_ratio || params.aspectRatio || params.ratio || providerDefaults.aspect_ratio || providerDefaults.ratio;
-  return AGNES_IMAGE_SIZES[ratio] || null;
+  if (typeof explicit === "string" && /^\d+x\d+$/i.test(explicit.trim())) {
+    const size = explicit.trim();
+    if (!Object.values(AGNES_IMAGE_SIZES).includes(size)) {
+      throw new Error(`Agnes image size "${size}" is unsupported`);
+    }
+    return size;
+  }
+  if (explicit) {
+    const resolution = String(explicit).trim().toUpperCase();
+    if (resolution !== "1K") {
+      throw new Error(`Agnes image resolution "${explicit}" is unsupported; supported resolutions: 1K`);
+    }
+  }
+  const effectiveRatio = ratio || "3:2";
+  const size = AGNES_IMAGE_SIZES[effectiveRatio];
+  if (!size) {
+    throw new Error(`Agnes image ratio "${effectiveRatio}" is unsupported`);
+  }
+  return size;
 }
 
 function collectResponseImages(data) {

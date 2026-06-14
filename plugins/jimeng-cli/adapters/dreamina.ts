@@ -10,6 +10,7 @@ const execFileAsync = promisify(execFile);
 export const JIMENG_INSTALL_COMMAND = "curl -s https://jimeng.jianying.com/cli | bash";
 
 const IMAGE_RATIOS = ["21:9", "16:9", "3:2", "4:3", "1:1", "3:4", "2:3", "9:16"];
+const IMAGE_RATIOS_SET = new Set(IMAGE_RATIOS);
 const VIDEO_RATIOS = ["1:1", "3:4", "16:9", "4:3", "9:16", "21:9"];
 const RESULT_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".mp4", ".mov", ".webm"]);
 const PENDING_STATUSES = new Set(["querying", "pending", "running", "processing", "submitted"]);
@@ -184,6 +185,36 @@ function imageResolution(params: any = {}, defaults: any = {}) {
   return params.resolution_type || params.resolutionType || params.resolution || defaults.resolution_type || defaults.resolution;
 }
 
+function supportedImageResolutions(modelVersion) {
+  const version = String(modelVersion || "").trim();
+  if (/^(3\.0|3\.1)$/.test(version)) return ["1k", "2k"];
+  return ["2k", "4k"];
+}
+
+function normalizeImageResolution(value) {
+  if (!value) return "";
+  const match = String(value).trim().toLowerCase().match(/^([124])\s*k$/);
+  return match ? `${match[1]}k` : String(value).trim();
+}
+
+function resolveImageResolution(params: any = {}, defaults: any = {}, modelVersion = "") {
+  const supported = supportedImageResolutions(modelVersion);
+  const raw = imageResolution(params, defaults) || supported[supported.length - 1];
+  const resolution = normalizeImageResolution(raw);
+  if (!supported.includes(resolution)) {
+    throw new Error(`Jimeng image resolution "${raw}" is unsupported for model "${modelVersion}"; supported resolutions: ${supported.join(", ")}`);
+  }
+  return resolution;
+}
+
+function resolveImageRatio(params: any = {}, defaults: any = {}) {
+  const ratio = params.ratio || params.aspect_ratio || params.aspectRatio || defaults.ratio || "3:2";
+  if (!IMAGE_RATIOS_SET.has(ratio)) {
+    throw new Error(`Jimeng image ratio "${ratio}" is unsupported`);
+  }
+  return ratio;
+}
+
 function videoResolution(params: any = {}, defaults: any = {}) {
   return params.video_resolution || params.videoResolution || params.resolution || defaults.video_resolution || defaults.videoResolution || defaults.resolution;
 }
@@ -354,8 +385,8 @@ function buildImageSubmitArgs(params: any = {}, ctx: any = {}) {
   }
   appendStringArg(args, "--prompt", params.prompt);
   appendStringArg(args, "--model_version", modelVersion);
-  appendStringArg(args, "--ratio", params.ratio || params.aspect_ratio || params.aspectRatio || defaults.ratio);
-  appendStringArg(args, "--resolution_type", imageResolution(params, defaults));
+  appendStringArg(args, "--ratio", resolveImageRatio(params, defaults));
+  appendStringArg(args, "--resolution_type", resolveImageResolution(params, defaults, modelVersion));
   appendStringArg(args, "--poll", 0);
   return args;
 }
