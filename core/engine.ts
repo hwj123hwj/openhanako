@@ -39,6 +39,7 @@ import { getToolSessionPath, normalizeToolRuntimeContext } from "../lib/tools/to
 import { loadLocale } from "../lib/i18n.ts";
 import { createApprovalGateway, createModelApprovalReviewer } from "../lib/approval-gateway.ts";
 import { callText } from "./llm-client.ts";
+import { SESSION_APPROVAL_POLICIES } from "./session-permission-mode.ts";
 
 /** 已知的外部 AI 工具技能目录（相对 $HOME） */
 export const WELL_KNOWN_SKILL_PATHS = [
@@ -2164,6 +2165,9 @@ export class HanaEngine {
     const getSessionPath = typeof opts.getSessionPath === "function"
       ? opts.getSessionPath
       : (() => null);
+    const allowHumanApproval = opts.allowHumanApproval !== false;
+    const approvalPolicy = opts.approvalPolicy
+      || (allowHumanApproval ? SESSION_APPROVAL_POLICIES.INTERACTIVE : SESSION_APPROVAL_POLICIES.DENY_ON_PROMPT);
 
     // Append plugin tools
     const pluginTools = this._pluginManager?.getAllTools() || [];
@@ -2188,6 +2192,8 @@ export class HanaEngine {
             ...(sessionPath ? { sessionPath } : {}),
             ...(opts.bridgeContext ? { bridgeContext: opts.bridgeContext } : {}),
             ...(opts.notificationContext ? { notificationContext: opts.notificationContext } : {}),
+            allowHumanApproval,
+            approvalPolicy,
             agentId,
             ...executionScope,
           };
@@ -2209,6 +2215,8 @@ export class HanaEngine {
           ...(sessionPath ? { sessionPath } : {}),
           ...(opts.bridgeContext ? { bridgeContext: opts.bridgeContext } : {}),
           ...(opts.notificationContext ? { notificationContext: opts.notificationContext } : {}),
+          allowHumanApproval,
+          approvalPolicy,
           agentId,
           ...executionScope,
         };
@@ -2326,14 +2334,19 @@ export class HanaEngine {
       : (sessionPath) => this.getSessionPermissionMode(sessionPath);
     // 拦截上下文（如 { isSubagent }）：classify 据此做与 mode 无关的固定边界（防自递归等）。
     const permissionContext = opts.permissionContext || null;
-    const allowHumanApproval = opts.allowHumanApproval !== false;
     result = {
       ...result,
       tools: wrapWithSessionPermission(result.tools, {
         getSessionPath,
         getPermissionMode,
         permissionContext,
+        agentId,
+        cwd,
+        workspaceFolders,
+        authorizedFolders: staticAuthorizedFolders,
+        getAuthorizedFolders,
         allowHumanApproval,
+        approvalPolicy,
         getConfirmStore: () => this._confirmStore,
         getApprovalGateway: () => this._approvalGateway,
         emitEvent: (event, sessionPath) => this._emitEvent(event, sessionPath),
@@ -2342,7 +2355,13 @@ export class HanaEngine {
         getSessionPath,
         getPermissionMode,
         permissionContext,
+        agentId,
+        cwd,
+        workspaceFolders,
+        authorizedFolders: staticAuthorizedFolders,
+        getAuthorizedFolders,
         allowHumanApproval,
+        approvalPolicy,
         getConfirmStore: () => this._confirmStore,
         getApprovalGateway: () => this._approvalGateway,
         emitEvent: (event, sessionPath) => this._emitEvent(event, sessionPath),

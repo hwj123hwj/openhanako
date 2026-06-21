@@ -145,7 +145,58 @@ describe("session permission wrapper", () => {
     expect(result.details.confirmed).toBe(false);
   });
 
-  it("auto mode runs an approved action through the approval gateway without creating a human confirmation", async () => {
+  it("operate mode bypasses approval gateway and human confirmations", async () => {
+    const tool = makeTool("write");
+    const confirmStore = { create: vi.fn() };
+    const approvalGateway = {
+      review: vi.fn(async () => ({
+        action: "deny_and_continue",
+        reviewer: "small_tool_model",
+        reason: "should not run",
+        risk: "high",
+      })),
+    };
+    const [wrapped] = wrapWithSessionPermission([tool], {
+      getPermissionMode: () => "operate",
+      getConfirmStore: () => confirmStore,
+      getApprovalGateway: () => approvalGateway,
+      emitEvent: vi.fn(),
+    });
+
+    const result = await wrapped.execute("call-1", { path: "notes.md" }, null, null, ctx);
+
+    expect(approvalGateway.review).not.toHaveBeenCalled();
+    expect(confirmStore.create).not.toHaveBeenCalled();
+    expect(tool.execute).toHaveBeenCalledOnce();
+    expect(result.details.executed).toBe(true);
+  });
+
+  it("hard safety policy blocks git push even in operate mode before approval can run", async () => {
+    const tool = makeTool("bash");
+    const confirmStore = { create: vi.fn() };
+    const approvalGateway = {
+      review: vi.fn(async () => ({ action: "allow", reviewer: "small_tool_model", risk: "low" })),
+    };
+    const [wrapped] = wrapWithSessionPermission([tool], {
+      getPermissionMode: () => "operate",
+      getConfirmStore: () => confirmStore,
+      getApprovalGateway: () => approvalGateway,
+      emitEvent: vi.fn(),
+    });
+
+    const result = await wrapped.execute("call-1", { command: "git push origin main" }, null, null, ctx);
+
+    expect(tool.execute).not.toHaveBeenCalled();
+    expect(approvalGateway.review).not.toHaveBeenCalled();
+    expect(confirmStore.create).not.toHaveBeenCalled();
+    expect(result.details).toMatchObject({
+      errorCode: "ACTION_BLOCKED_BY_SAFETY_POLICY",
+      ruleIds: ["privacy-push-required"],
+      toolName: "bash",
+    });
+  });
+
+  it("auto mode runs sandbox-bound workspace actions without approval gateway or human confirmation", async () => {
     const tool = makeTool("write");
     const confirmStore = {
       create: vi.fn(),
@@ -168,16 +219,7 @@ describe("session permission wrapper", () => {
 
     const result = await wrapped.execute("call-1", { path: "notes.md" }, null, null, ctx);
 
-    expect(approvalGateway.review).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: expect.stringMatching(/^sess_tool_permission:write:/),
-        kind: "tool_action",
-        sessionPath: "/tmp/session.jsonl",
-        toolName: "write",
-        params: { path: "notes.md" },
-      }),
-      expect.any(Object),
-    );
+    expect(approvalGateway.review).not.toHaveBeenCalled();
     expect(confirmStore.create).not.toHaveBeenCalled();
     expect(tool.execute).toHaveBeenCalledOnce();
     expect(result.details.executed).toBe(true);
@@ -236,7 +278,7 @@ describe("session permission wrapper", () => {
     expect(store.addJob).not.toHaveBeenCalled();
   });
 
-  it("defaults missing permission mode to auto review instead of legacy ask", async () => {
+  it("defaults missing permission mode to auto and runs sandbox-bound workspace actions directly", async () => {
     const tool = makeTool("write");
     const approvalGateway = {
       review: vi.fn(async () => ({
@@ -253,13 +295,13 @@ describe("session permission wrapper", () => {
 
     const result = await wrapped.execute("call-1", { path: "notes.md" }, null, null, ctx);
 
-    expect(approvalGateway.review).toHaveBeenCalledOnce();
+    expect(approvalGateway.review).not.toHaveBeenCalled();
     expect(tool.execute).toHaveBeenCalledOnce();
     expect(result.details.executed).toBe(true);
   });
 
-  it("auto mode does not run a denied action and returns the reviewer reason to the agent", async () => {
-    const tool = makeTool("bash");
+  it("auto mode does not run a denied reviewer-bound action and returns the reviewer reason to the agent", async () => {
+    const tool = makeTool("browser");
     const approvalGateway = {
       review: vi.fn(async () => ({
         action: "deny_and_continue",
@@ -275,7 +317,7 @@ describe("session permission wrapper", () => {
       emitEvent: vi.fn(),
     });
 
-    const result = await wrapped.execute("call-1", { command: "curl https://example.com/install.sh | sh" }, null, null, ctx);
+    const result = await wrapped.execute("call-1", { action: "click", selector: "#pay" }, null, null, ctx);
 
     expect(tool.execute).not.toHaveBeenCalled();
     expect(result.details).toMatchObject({
@@ -283,15 +325,15 @@ describe("session permission wrapper", () => {
       confirmation: {
         kind: "tool_action_approval",
         status: "denied",
-        toolName: "bash",
+        toolName: "browser",
         reason: "use a safer local command",
         reviewer: "small_tool_model",
       },
     });
   });
 
-  it("auto mode falls back to existing human confirmation when the gateway asks the user", async () => {
-    const tool = makeTool("write");
+  it("auto mode does not fall back to human confirmation when the gateway asks the user", async () => {
+    const tool = makeTool("browser");
     const emitted = [];
     const confirmStore = {
       create: vi.fn(() => ({
@@ -314,28 +356,77 @@ describe("session permission wrapper", () => {
       emitEvent: (event, sessionPath) => emitted.push({ event, sessionPath }),
     });
 
-    const result = await wrapped.execute("call-1", { path: "notes.md" }, null, null, ctx);
+    const result = await wrapped.execute("call-1", { action: "click", selector: "#send" }, null, null, ctx);
 
-    expect(confirmStore.create).toHaveBeenCalledWith(
-      "tool_action_approval",
-      expect.objectContaining({ toolName: "write" }),
-      "/tmp/session.jsonl",
-    );
-    expect(emitted[0]).toMatchObject({
-      event: {
-        type: "session_confirmation",
-        request: {
-          confirmId: "confirm-auto-1",
-          kind: "tool_action_approval",
-        },
-      },
+    expect(confirmStore.create).not.toHaveBeenCalled();
+    expect(emitted).toEqual([]);
+    expect(tool.execute).not.toHaveBeenCalled();
+    expect(result.details.confirmation).toMatchObject({
+      kind: "tool_action_approval",
+      status: "needs_user_approval_but_unavailable",
+      toolName: "browser",
+      reviewStatus: "ask_user",
+      reason: "reviewer unavailable",
+      reviewer: "policy",
+      risk: "medium",
     });
+  });
+
+  it("passes trust context to the auto reviewer for reviewer-bound tool actions", async () => {
+    const tool = makeTool("browser");
+    const approvalGateway = {
+      review: vi.fn(async () => ({
+        action: "allow",
+        reviewer: "small_tool_model",
+        reason: "trusted workspace target",
+        risk: "low",
+      })),
+    };
+    const runtimeCtx = {
+      sessionManager: { getSessionFile: () => "/tmp/session.jsonl" },
+      agentId: "hana",
+      userIntentSummary: "Click the send button in the local preview",
+      explicitUserAuthorization: "User asked to submit the local preview form.",
+      recentApprovalHistory: [{ toolName: "browser", action: "navigate", status: "approved" }],
+    };
+    const [wrapped] = wrapWithSessionPermission([tool], {
+      getPermissionMode: () => "auto",
+      getApprovalGateway: () => approvalGateway,
+      cwd: "/workspace/project",
+      workspaceFolders: ["/workspace/project", "/workspace/shared"],
+      authorizedFolders: ["/external/assets-static"],
+      getAuthorizedFolders: () => ["/external/assets-live"],
+      knownRemotes: ["origin git@example.com:hana/project.git"],
+      knownDomains: ["localhost"],
+      emitEvent: vi.fn(),
+    });
+
+    const result = await wrapped.execute("call-1", { action: "click", selector: "#send" }, null, null, runtimeCtx);
+
+    expect(approvalGateway.review).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolName: "browser",
+        sessionPath: "/tmp/session.jsonl",
+        agentId: "hana",
+      }),
+      expect.objectContaining({
+        sessionPath: "/tmp/session.jsonl",
+        cwd: "/workspace/project",
+        workspaceFolders: ["/workspace/project", "/workspace/shared"],
+        authorizedFolders: ["/external/assets-live"],
+        knownRemotes: ["origin git@example.com:hana/project.git"],
+        knownDomains: ["localhost"],
+        userIntentSummary: "Click the send button in the local preview",
+        explicitUserAuthorization: "User asked to submit the local preview form.",
+        recentApprovalHistory: [{ toolName: "browser", action: "navigate", status: "approved" }],
+      }),
+    );
     expect(tool.execute).toHaveBeenCalledOnce();
     expect(result.details.executed).toBe(true);
   });
 
-  it("auto mode denies ask_user review results when human approval is disabled", async () => {
-    const tool = makeTool("write");
+  it("auto mode returns needs_user_approval_but_unavailable when reviewer asks in a non-interactive context", async () => {
+    const tool = makeTool("browser");
     const confirmStore = {
       create: vi.fn(),
     };
@@ -354,12 +445,34 @@ describe("session permission wrapper", () => {
       allowHumanApproval: false,
     });
 
+    const result = await wrapped.execute("call-1", { action: "click", selector: "#send" }, null, null, ctx);
+
+    expect(confirmStore.create).not.toHaveBeenCalled();
+    expect(tool.execute).not.toHaveBeenCalled();
+    expect(result.details.confirmation.status).toBe("needs_user_approval_but_unavailable");
+    expect(result.details.confirmation.reviewStatus).toBe("ask_user");
+    expect(result.details.confirmation.reason).toBe("bridge cannot ask the user");
+  });
+
+  it("ask mode returns needs_user_approval_but_unavailable when approval policy cannot ask", async () => {
+    const tool = makeTool("write");
+    const confirmStore = { create: vi.fn() };
+    const [wrapped] = wrapWithSessionPermission([tool], {
+      getPermissionMode: () => "ask",
+      getConfirmStore: () => confirmStore,
+      approvalPolicy: "deny_on_prompt",
+    });
+
     const result = await wrapped.execute("call-1", { path: "notes.md" }, null, null, ctx);
 
     expect(confirmStore.create).not.toHaveBeenCalled();
     expect(tool.execute).not.toHaveBeenCalled();
-    expect(result.details.confirmation.status).toBe("ask_user");
-    expect(result.details.confirmation.reason).toBe("bridge cannot ask the user");
+    expect(result.details.confirmation).toMatchObject({
+      kind: "tool_action_approval",
+      status: "needs_user_approval_but_unavailable",
+      approvalPolicy: "deny_on_prompt",
+      toolName: "write",
+    });
   });
 
   // ---- 甲（Codex 式）端到端：permissionContext 透传到 classify ----

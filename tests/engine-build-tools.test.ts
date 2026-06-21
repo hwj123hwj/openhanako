@@ -126,6 +126,9 @@ describe("HanaEngine.buildTools", () => {
     ], {
       agentDir,
       workspace: tmpDir,
+      workspaceFolders: [path.join(tmpDir, "shared")],
+      authorizedFolders: [path.join(tmpDir, "assets-static")],
+      getAuthorizedFolders: () => [path.join(tmpDir, "assets-live")],
       getPermissionMode: () => "auto",
     });
 
@@ -136,8 +139,14 @@ describe("HanaEngine.buildTools", () => {
     );
 
     expect(approvalGateway.review).toHaveBeenCalledWith(
-      expect.objectContaining({ toolName: "stage_files", sessionPath }),
-      expect.any(Object),
+      expect.objectContaining({ toolName: "stage_files", sessionPath, agentId: "focus" }),
+      expect.objectContaining({
+        sessionPath,
+        agentId: "focus",
+        cwd: tmpDir,
+        workspaceFolders: [path.join(tmpDir, "shared")],
+        authorizedFolders: [path.join(tmpDir, "assets-live")],
+      }),
     );
     expect(execute).toHaveBeenCalledOnce();
     expect(result.details.executed).toBe(true);
